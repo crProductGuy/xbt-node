@@ -224,3 +224,8 @@ scrubbed when this project moved to its crypto-side repo.
   only false positives (an English verb in a script message, placeholder names). The repo-local git identity is the crypto account's.
 - **Left for the owner:** approving the first commit, creating the empty private repository on GitHub (there is
   no GitHub CLI on this PC), and whether the old project folders go to the attic.
+- **Then, the same session:** the owner installed the GitHub CLI and signed it in as the crypto account, and said
+  "go ahead". The agent checked the CLI had not taken over git's own credential store (it had not, so each remote
+  keeps its account in its URL), reran the leak grep over the full history including the commit message, made the
+  first commit, created the repository private and pushed. The attic move of the old folders still waits for the
+  owner.
