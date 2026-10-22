@@ -1,0 +1,20 @@
+# Checkpoint for the machine where the work happens. Holds LAN addresses, the
+# node's Linux user and other details that must never reach this repo.
+STATUS.md
+
+# Staging for the drive: manifests from make-manifest.ps1 (snapshot data, about
+# 1 MB, already on the drive) plus a copy of node/. Rebuilt before every fill.
+seed/to-drive/
+
+# Logs from a fill or a bring-up
+*.log
+
+# Secrets: the node's RPC settings never belong here
+.env
+.env.*
+bitcoin.conf
+settings.json
+
+# OS
+.DS_Store
+Thumbs.db

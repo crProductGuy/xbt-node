@@ -1,0 +1,118 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          bitcoind
+# Required-Start:    $local_fs $remote_fs $network $time
+# Required-Stop:     $local_fs $remote_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Bitcoin Knots node with its blocks on an external drive
+# Description:       Starts the node only when the external drive is mounted, and on
+#                    shutdown waits for the node to exit cleanly before the drive is
+#                    unmounted. It never force-kills the node.
+### END INIT INFO
+#
+# devuan-bitcoind.init: DEVUAN (sysvinit) ONLY. For Ubuntu use ubuntu-bitcoind.service.
+# Written on Windows; NOT yet run on Linux. Full instructions: README-LINUX-NODE.txt.
+#
+# INSTALL (as root), after seed-node.sh has finished and the node has run once by hand:
+#   install -m 755 /mnt/passport/devuan-bitcoind.init /etc/init.d/bitcoind
+#   printf 'BITCOIN_USER=yourname\nBITCOIND=/full/path/to/bitcoind\n' > /etc/default/bitcoind
+#   update-rc.d bitcoind defaults
+#   service bitcoind start ; service bitcoind status
+# REMOVE:
+#   service bitcoind stop ; update-rc.d bitcoind remove ; rm /etc/init.d/bitcoind
+#
+# Settings live in /etc/default/bitcoind. BITCOIN_USER is required; the rest have defaults.
+
+NAME=bitcoind
+BITCOIN_USER=
+BITCOIND=/usr/local/bin/bitcoind
+DATADIR=
+MNT=/mnt/passport
+MOUNT_WAIT=90     # seconds to wait at boot for the USB drive to appear
+STOP_WAIT=900     # seconds to wait for a clean exit before giving up (never kills)
+
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+. /lib/lsb/init-functions
+
+check_config() {
+    if [ -z "$BITCOIN_USER" ]; then
+        log_failure_msg "$NAME: BITCOIN_USER is not set in /etc/default/$NAME"; exit 6
+    fi
+    if ! getent passwd "$BITCOIN_USER" >/dev/null; then
+        log_failure_msg "$NAME: user '$BITCOIN_USER' does not exist"; exit 6
+    fi
+    if [ ! -x "$BITCOIND" ]; then
+        log_failure_msg "$NAME: $BITCOIND is not an executable. Set BITCOIND in /etc/default/$NAME"; exit 5
+    fi
+    [ -n "$DATADIR" ] || DATADIR="$(getent passwd "$BITCOIN_USER" | cut -d: -f6)/.bitcoin"
+    if [ ! -d "$DATADIR/chainstate" ]; then
+        log_failure_msg "$NAME: $DATADIR/chainstate is missing. Run seed-node.sh first"; exit 6
+    fi
+    PIDFILE="$DATADIR/bitcoind.pid"
+}
+
+is_running() {
+    start-stop-daemon --status --pidfile "$PIDFILE" --exec "$BITCOIND" >/dev/null 2>&1
+}
+
+# The drive is USB and may show up after this script runs at boot, so wait for it.
+drive_ready() {
+    waited=0
+    while ! mountpoint -q "$MNT"; do
+        mount "$MNT" >/dev/null 2>&1 && break
+        [ "$waited" -ge "$MOUNT_WAIT" ] && return 1
+        sleep 5
+        waited=$((waited + 5))
+    done
+    [ -d "$MNT/blocks/index" ]
+}
+
+do_start() {
+    if is_running; then
+        log_success_msg "$NAME is already running"; return 0
+    fi
+    if ! drive_ready; then
+        log_failure_msg "$NAME: NOT started. $MNT is not mounted or has no blocks/index. Plug in the drive, then: service $NAME start"
+        return 1
+    fi
+    log_daemon_msg "Starting Bitcoin Knots" "$NAME"
+    umask 077
+    start-stop-daemon --start --quiet --chuid "$BITCOIN_USER" --pidfile "$PIDFILE" \
+        --exec "$BITCOIND" -- -daemon -datadir="$DATADIR"
+    rc=$?
+    log_end_msg $rc
+    return $rc
+}
+
+# TERM asks the node for the same clean shutdown as 'bitcoin-cli stop'. Only the process
+# named in the node's own pid file is signalled, and only if it really is $BITCOIND.
+do_stop() {
+    if ! is_running; then
+        log_success_msg "$NAME is not running"; return 0
+    fi
+    log_daemon_msg "Stopping Bitcoin Knots, waiting up to ${STOP_WAIT}s for a clean exit" "$NAME"
+    start-stop-daemon --stop --quiet --retry "TERM/$STOP_WAIT" --pidfile "$PIDFILE" --exec "$BITCOIND"
+    rc=$?
+    if [ $rc -eq 2 ]; then
+        log_end_msg 1
+        log_failure_msg "$NAME is STILL RUNNING after ${STOP_WAIT}s and was not killed. Do not unplug the drive. Check $DATADIR/debug.log"
+        return 1
+    fi
+    log_end_msg 0
+    return 0
+}
+
+case "$1" in
+    start)
+        check_config; do_start ;;
+    stop)
+        check_config; do_stop ;;
+    restart|force-reload)
+        check_config; do_stop && do_start ;;
+    status)
+        check_config; status_of_proc -p "$PIDFILE" "$BITCOIND" "$NAME" ;;
+    *)
+        echo "Usage: service $NAME {start|stop|restart|status}" >&2
+        exit 3 ;;
+esac

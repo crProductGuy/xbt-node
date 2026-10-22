@@ -1,0 +1,46 @@
+# ubuntu-bitcoind.service: UBUNTU 24.04 (systemd) ONLY. For Devuan use devuan-bitcoind.init.
+# Written on Windows; NOT yet run on Linux. Full instructions: README-LINUX-NODE.txt.
+#
+# This is a template. YOURNAME and /FULL/PATH/TO/bitcoind must be replaced. The install
+# command below does both, run as the user who owns the node, after seed-node.sh has
+# finished and the node has been started and stopped by hand once:
+#
+#   sed -e "s|YOURNAME|$USER|g" -e "s|/FULL/PATH/TO/bitcoind|$(command -v bitcoind)|" \
+#       /mnt/passport/ubuntu-bitcoind.service | sudo tee /etc/systemd/system/bitcoind.service >/dev/null
+#   systemd-analyze verify /etc/systemd/system/bitcoind.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bitcoind
+#   systemctl status bitcoind
+#
+# REMOVE:
+#   sudo systemctl disable --now bitcoind ; sudo rm /etc/systemd/system/bitcoind.service
+#   sudo systemctl daemon-reload
+
+[Unit]
+Description=Bitcoin Knots node (blocks on the external drive at /mnt/passport)
+# Start only after the drive is mounted, and stop before it is unmounted.
+RequiresMountsFor=/mnt/passport
+Wants=network-online.target
+After=network-online.target time-sync.target
+# Refuse to start, loudly, if the drive or the chainstate is not where it should be.
+AssertPathIsDirectory=/mnt/passport/blocks/index
+AssertPathIsDirectory=/home/YOURNAME/.bitcoin/chainstate
+
+[Service]
+Type=simple
+User=YOURNAME
+UMask=0077
+# No -daemon: systemd keeps the node in the foreground and tracks it directly.
+ExecStart=/FULL/PATH/TO/bitcoind -datadir=/home/YOURNAME/.bitcoin
+# TERM asks the node for the same clean shutdown as 'bitcoin-cli stop'.
+KillSignal=SIGTERM
+# Wait up to 15 minutes for a clean exit, and never force-kill after that.
+TimeoutStopSec=900
+SendSIGKILL=no
+# No automatic restart: a node that exits with an error should be looked at first.
+Restart=no
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

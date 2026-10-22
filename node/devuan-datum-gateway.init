@@ -1,0 +1,101 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          datum-gateway
+# Required-Start:    $local_fs $remote_fs $network bitcoind
+# Required-Stop:     $local_fs $remote_fs $network bitcoind
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: DATUM gateway (PATUM / Pyblock Wavicles) for the local node
+# Description:       Starts the gateway that PATUM built, once the local node answers
+#                    RPC. Stops before the node at shutdown.
+### END INIT INFO
+#
+# devuan-datum-gateway.init: DEVUAN (sysvinit) ONLY. PATUM itself assumes systemd, so on
+# Devuan nothing it sets up starts at boot; this script and devuan-bitcoind.init do that.
+#
+# INSTALL (as root), with bitcoind already installed from devuan-bitcoind.init:
+#   install -m 755 devuan-datum-gateway.init /etc/init.d/datum-gateway
+#   printf 'GW_USER=yourname\n' > /etc/default/datum-gateway
+#   update-rc.d datum-gateway defaults
+# REMOVE:
+#   service datum-gateway stop ; update-rc.d datum-gateway remove ; rm /etc/init.d/datum-gateway
+#
+# Settings live in /etc/default/datum-gateway. GW_USER is required; the rest default to
+# PATUM's layout under that user's home.
+
+NAME=datum-gateway
+GW_USER=
+GW_DIR=
+GW_CONF=
+NODE_DIR=
+RPC_WAIT=3600     # seconds the gateway waits at boot for the node's RPC (txindex can be slow)
+PIDFILE=/run/$NAME.pid
+OUTFILE=/var/log/$NAME.out
+
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+. /lib/lsb/init-functions
+
+check_config() {
+    if [ -z "$GW_USER" ] || ! getent passwd "$GW_USER" >/dev/null; then
+        log_failure_msg "$NAME: GW_USER is not set to an existing user in /etc/default/$NAME"; exit 6
+    fi
+    home=$(getent passwd "$GW_USER" | cut -d: -f6)
+    [ -n "$GW_DIR" ]   || GW_DIR="$home/pyblock-gateway"
+    [ -n "$GW_CONF" ]  || GW_CONF="$GW_DIR/wavicles.json"
+    [ -n "$NODE_DIR" ] || NODE_DIR="$home/pyblock-node"
+    GW_BIN="$GW_DIR/datum_gateway"
+    CLI="$NODE_DIR/bin/bitcoin-cli"
+    for f in "$GW_BIN" "$CLI"; do
+        [ -x "$f" ] || { log_failure_msg "$NAME: $f is missing or not executable"; exit 5; }
+    done
+    [ -r "$GW_CONF" ] || { log_failure_msg "$NAME: $GW_CONF is missing"; exit 6; }
+}
+
+is_running() {
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+# A gateway started by PATUM (not by this script) has no pid file here. Starting a second
+# one would fight it for port 23334, so refuse instead.
+other_gateway() {
+    pgrep -u "$GW_USER" -x datum_gateway >/dev/null 2>&1
+}
+
+do_start() {
+    if is_running; then log_success_msg "$NAME is already running"; return 0; fi
+    if other_gateway; then
+        log_failure_msg "$NAME: a datum_gateway is already running (started by PATUM?). Not starting a second one"
+        return 1
+    fi
+    log_daemon_msg "Starting DATUM gateway (waits for the node's RPC in the background)" "$NAME"
+    # The wait runs in the background so boot does not stall while the node loads.
+    # exec keeps the same pid, so the pid file then names datum_gateway itself.
+    start-stop-daemon --start --quiet --background --make-pidfile --pidfile "$PIDFILE" \
+        --chuid "$GW_USER" --chdir "$GW_DIR" --output "$OUTFILE" --startas /bin/sh -- -c \
+        "'$CLI' -datadir='$NODE_DIR/data' -rpcwait -rpcwaittimeout=$RPC_WAIT getblockcount >/dev/null && exec '$GW_BIN' -c '$GW_CONF'"
+    rc=$?
+    log_end_msg $rc
+    return $rc
+}
+
+do_stop() {
+    if ! is_running; then log_success_msg "$NAME is not running (from this script)"; rm -f "$PIDFILE"; return 0; fi
+    log_daemon_msg "Stopping DATUM gateway" "$NAME"
+    start-stop-daemon --stop --quiet --retry TERM/30/KILL/5 --pidfile "$PIDFILE"
+    rc=$?
+    rm -f "$PIDFILE"
+    log_end_msg $rc
+    return $rc
+}
+
+case "$1" in
+    start)   check_config; do_start ;;
+    stop)    check_config; do_stop ;;
+    restart|force-reload) check_config; do_stop; do_start ;;
+    status)
+        check_config
+        if is_running; then log_success_msg "$NAME is running (pid $(cat "$PIDFILE"))"; exit 0
+        elif other_gateway; then log_success_msg "$NAME: a datum_gateway started outside this script is running"; exit 0
+        else log_failure_msg "$NAME is not running"; exit 3; fi ;;
+    *) echo "Usage: service $NAME {start|stop|restart|status}" >&2; exit 3 ;;
+esac

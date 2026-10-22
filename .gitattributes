@@ -1,0 +1,10 @@
+# Normalize line endings at commit time, so a whole-file rewrite by any tool
+# cannot churn the diff.
+* text=auto
+
+# Everything that runs on Linux must keep LF; a CR breaks sh and sha256sum.
+*.sh text eol=lf
+*.init text eol=lf
+*.service text eol=lf
+*.sha256 text eol=lf
+README-LINUX-NODE.txt text eol=lf

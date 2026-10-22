@@ -1,0 +1,7 @@
+manifests made   2026-10-15 23:42 UTC
+source           C:\Users\<user>\AppData\Roaming\Bitcoin
+files            11604  (189 in chainstate.sha256, 11415 in blocks.sha256)
+bytes            879929174568
+last tip lines in debug.log:
+2026-10-15T22:17:32Z UpdateTip: new best=000000000000000093789d24e65e85fd9a79104ee88a051e77031e5911a98314 height=977437 version=0xa0000000 log2_work=96.312887 tx=1417538399 date='2026-10-15T22:16:47Z' progress=1.000000 cache=116.3MiB(807337txo)
+2026-10-15T22:27:05Z UpdateTip: new best=0000000000000000480223f956923f33bd415771a33e7ccb404a591d3c260660 height=977438 version=0xa0000000 log2_work=96.312887 tx=1417538672 date='2026-10-15T22:26:29Z' progress=1.000000 cache=116.3MiB(808337txo)
