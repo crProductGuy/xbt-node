@@ -229,3 +229,27 @@ scrubbed when this project moved to its crypto-side repo.
   keeps its account in its URL), reran the leak grep over the full history including the commit message, made the
   first commit, created the repository private and pushed. The attic move of the old folders still waits for the
   owner.
+
+## 2026-10-28, session D (ddbba4a0): the node upgrade that looked hung
+
+- **The ask:** "I have PATUM updated to 0.5.6 and it is updating the Knots node to 29.4.3 but it seems to have
+  hung... downloaded, verified the release signature, extracting, then just hung for 6+ minutes."
+- **Finding: it had not hung.** Over SSH the agent found the new 29.4.3 binary in place, the old node shut down
+  cleanly and the new one loaded in ten seconds, synced, with the fork rules still set. The gateway had kept
+  its miners throughout. The window showing "extracting" was the panel's own console, which simply printed
+  nothing more. The agent's first reading said "the panel's progress display stalled"; the owner corrected that
+  it was a terminal window, and that the panel still offered a node-update button.
+- **Second finding: why the panel still asked.** The panel's status API showed the update job finished ok, yet
+  reported the node as 29.4.2. It takes the version from the text the node advertises to peers, and that text
+  is a fixed `uaspoof` line in the node's config that PATUM writes at install time but not on update. So the
+  warning was false, and pressing the button again would have restarted the node for nothing.
+- **Options given:** (1) fix the one line and restart the node, (2) leave the cosmetic warning, (3) report it
+  upstream. Agent recommended 1, because a real rule change two to three days out made a standing false
+  "outdated" warning dangerous to ignore. The owner chose 1.
+- **Done and verified:** config backed up, one line changed (diff checked), node stopped over RPC and started
+  with PATUM's own command so the autostart script still recognises it. After: new version advertised, fork
+  rules and index loaded, synced, panel reports up to date, gateway never restarted, about 11 seconds without a
+  fresh template.
+- **Explained, not changed:** the gateway's "empty work sent to 2 clients" lines are its instant coinbase-only
+  job after each new network block, so miners stop working on a stale block before the full template is ready.
+- **Left for the owner:** whether to report the update-skips-uaspoof behaviour to PyBLOCK.
