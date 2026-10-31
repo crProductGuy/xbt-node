@@ -253,3 +253,40 @@ scrubbed when this project moved to its crypto-side repo.
 - **Explained, not changed:** the gateway's "empty work sent to 2 clients" lines are its instant coinbase-only
   job after each new network block, so miners stop working on a stale block before the full template is ready.
 - **Left for the owner:** whether to report the update-skips-uaspoof behaviour to PyBLOCK.
+
+## 2026-10-31, session E (79d5edad): a health check, a fast clock, and the cost of fixing it
+
+- **The ask:** "look into the HP 14", then, after the first report: "Patum page is up but static, not live...
+  Worried that things underneath aren't working, though the DATUM gateway console web page looks OK."
+- **Health check, read-only over SSH:** node synced at the tip with 17 peers, same process since the 10-28
+  upgrade; gateway on its 10-21 process with both miners and a fresh job about every 41 s; no errors in either
+  log; disk and memory comfortable. A rule change about 65 blocks out needs Knots 29.4.3, which the node runs.
+- **Finding: the static panel page was only the panel.** Its process had exited (when is unknown) and nothing
+  listened on its port. The panel picks a new port on each run, so refreshing an old tab fails even after a
+  restart. The node and gateway underneath were checked directly and were fine. The panel is the owner's to
+  restart by hand, as always.
+- **Finding: the clock ran about 19 s fast and nothing kept it in sync.** Measured against the PC, whose own
+  clock was checked against an internet time server first. No NTP daemon was installed (Devuan has no systemd,
+  so no built-in time sync); this was gateway-chain check G3, never run until now. The installer log dates the
+  Devuan install to 2026-10-13. Once running, chrony measured the drift at 11.9 ppm, about 1 s a day, which
+  fits 19 s over the 17 days since.
+- **Proposal and decision:** install chrony; the owner agreed. The agent added one change of its own: turn off
+  chrony's `rtcsync`, because the hardware clock keeps local time for Windows on this dual-boot machine and the
+  agent was not sure chrony's writes would respect that. Devuan already saves the system time to the hardware
+  clock at shutdown. The commands went to the owner as a short file on the transfer stick, pasted one line at
+  a time.
+- **Verified after:** clock within a millisecond of four time servers; chrony set to start at boot, ahead of
+  the gateway.
+- **The miss:** the agent said the one-time jump would come from the `makestep` command and warned the owner
+  to watch the gateway then. It came earlier: Debian starts chrony as soon as it is installed, and its default
+  config jumps a large error at once. The clock moved back 19.08 s; 3 ms later the gateway logged "no data
+  received from server in over 60 seconds", reconnected within a second, and the pool declined to resume the old
+  session, so the gateway discarded the shares it had queued for the pool. That is probably a few seconds of
+  pool credit, with no effect on any block. That the backward jump tripped the gateway's 60-second timer is an
+  inference from the timing; the gateway's code was not read.
+- **Lesson:** on a Debian-family mining machine, installing an NTP daemon is the moment the clock moves, not a
+  later command. Treat the install itself as the moment the gateway may drop.
+- **Left as is:** at boot, chrony and the gateway both start before the network, so chrony's first corrections
+  land while the gateway runs. With the clock saved at shutdown, the boot error should stay under chrony's
+  1-second jump threshold, so it will adjust gradually. Not changed; revisit only if a reboot shows the same
+  drop.
