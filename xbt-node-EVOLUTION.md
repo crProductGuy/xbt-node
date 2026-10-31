@@ -290,3 +290,15 @@ scrubbed when this project moved to its crypto-side repo.
   land while the gateway runs. With the clock saved at shutdown, the boot error should stay under chrony's
   1-second jump threshold, so it will adjust gradually. Not changed; revisit only if a reboot shows the same
   drop.
+- **Later the same session: the panel restarted, and a how-to page.** The owner asked the agent to restart the
+  panel. The agent found PATUM had updated its own panel to 0.5.7 on 10-29, after session D, and that the start
+  command in the notes now pointed at the old 0.5.3 installer file, so it used the current copy instead. It
+  started the panel over SSH, detached and on a fixed port so the address stays the same across restarts, then
+  checked that the node and gateway kept their processes and that no second copy of either started. At the
+  owner's request the start, use and stop steps went into a short page, kept on the transfer stick and on the
+  node machine.
+- **Upstream fix, reported by the owner:** PyBLOCK has fixed the stale version string found in session D. A
+  PATUM update that updates the node now rewrites the `uaspoof` line in the node's config as well, so the node
+  advertises its real version and the panel no longer raises a false "needs update"; the hand edit made in
+  session D is no longer needed. Not yet seen on this node, which has had no node update since; the next one
+  confirms it.
