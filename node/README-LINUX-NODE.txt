@@ -147,7 +147,19 @@ starts at boot. These two scripts do it:
   this node, and that in debug.log the line before the newest start is "Shutdown: done".
   Also set the BIOS to power on when AC returns, or a power cut leaves it off.
 
-  The PATUM panel itself is not started at boot. Start it by hand when you need it.
+  The PATUM panel itself is not started at boot. Start it by hand when you need it:
+    ~/pyblock-node/bin/patum -port 32999      (add -no-open over SSH)
+
+  Battery guard (laptop nodes). The desktop's low-battery action only works while
+  someone is logged in, and its default is often suspend, which ends in a crash
+  when the battery runs out. battery-guard.sh shuts down cleanly instead, logged in
+  or not: every minute, from cron, as root. It acts only when the AC adapter is off,
+  the battery is discharging and at or below 25 %, on two checks in a row.
+    sudo sh ~/init/install-battery-guard.sh          (prints what it reads)
+    sudo sh ~/init/install-battery-guard.sh remove   (undo)
+  Change the level in /etc/default/battery-guard (THRESHOLD=5..50). It logs to
+  syslog with the tag battery-guard. Keep it above the desktop's own critical
+  level, so it acts before any suspend can.
 
 
 ========================================================================

@@ -302,3 +302,21 @@ scrubbed when this project moved to its crypto-side repo.
   advertises its real version and the panel no longer raises a false "needs update"; the hand edit made in
   session D is no longer needed. Not yet seen on this node, which has had no node update since; the next one
   confirms it.
+- **Later the same session: clean shutdown, and the battery guard.** The owner: "It's very important for
+  Bitcoin nodes including Knots nodes, to be given a clean shut-down signal... Look into what is needed to do
+  that well. See if you can tell if PATUM has a way to trigger it." A read-only review found the shutdown and
+  reboot path already sound (gateway stops first, the node gets up to 15 minutes and is never forced, and all
+  three stops in the log were clean within seconds), and the blocks drive on the laptop's own USB port rather
+  than the dock. The gap was the battery: the desktop's low-battery action was suspend, and it only runs while
+  someone is logged in, which after a reboot nobody is. PATUM stops the node itself only on demand (its wizard
+  and its updates) and ships systemd units for its panel and update check alone, so on Devuan the clean stop at
+  shutdown comes only from this repo's init scripts.
+- **Built:** `battery-guard.sh`, run every minute by root from cron: when the AC adapter is off and the battery
+  is discharging at or below 25 % on two checks in a row, it calls the normal shutdown. The threshold sits above
+  the desktop's 20 % on purpose, because a suspended machine runs no cron jobs. Alternative considered: the
+  system's upower daemon, not chosen because it may not run without a desktop session and that could not be
+  verified cheaply. Tests run the shell Devuan uses (dash). A separate review found nothing serious and four
+  things worth fixing, all fixed before commit: tests that could pass on timing, a failed shutdown that was
+  neither logged nor retried, a wireless mouse's battery that could be read as the laptop's, and the settings
+  file's permissions. Two deliberate breaks of the script were each caught by the tests. Installing it is the
+  owner's step (sudo). The lid-on-battery setting went into the owner's BIOS steps instead of code.

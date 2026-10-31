@@ -71,6 +71,68 @@ check "  before stage 0" "$(grep -c 'Stage 0' "$WORK/real.txt")" 0
 check "hex_of matches the known hex of the serial" \
   "$(bash -c "$(sed -n '/^hex_of()/p' "$HERE/seed/make-ext4-seed.sh"); hex_of WD0000TEST01")" 574430303030544553543031
 
+# battery-guard.sh against a fake power_supply tree; the "shutdown" only appends to a file
+BG="$WORK/bg"; mkdir -p "$BG/ps/ACAD" "$BG/ps/BAT0"
+echo Mains > "$BG/ps/ACAD/type"; echo Battery > "$BG/ps/BAT0/type"
+printf '#!/bin/sh\necho "$*" >> "%s/shutdown-calls"\n' "$BG" > "$BG/fake-shutdown"; chmod +x "$BG/fake-shutdown"
+power() { echo "$1" > "$BG/ps/ACAD/online"; echo "$2" > "$BG/ps/BAT0/status"; echo "$3" > "$BG/ps/BAT0/capacity"; }
+# Devuan runs /bin/sh = dash; use it when present so the tests run the shell that matters.
+GSH=$(command -v dash || echo sh)
+guard() { BG_POWER_SUPPLY="$BG/ps" BG_STATE_DIR="$BG/state" BG_CONFIG="$BG/conf" BG_SHUTDOWN="${FAKE_SD:-$BG/fake-shutdown}" \
+          "$GSH" "$HERE/node/battery-guard.sh" "$@" 2>>"$BG/log"; }
+calls() { if [[ -f $BG/shutdown-calls ]]; then wc -l < "$BG/shutdown-calls" | tr -d ' '; else echo 0; fi; }
+reset_bg() { rm -rf "$BG/state" "$BG/shutdown-calls" "$BG/conf"; }
+
+reset_bg; power 1 Charging 10; guard; guard
+check "guard: on AC at 10 % never shuts down" "$(calls)" 0
+reset_bg; power 0 Discharging 60; guard; guard
+check "guard: on battery at 60 % does nothing" "$(calls)" 0
+reset_bg; power 0 Discharging 20; guard
+check "guard: first low reading does not act" "$(calls)" 0
+guard
+check "guard: second low reading in a row shuts down once" "$(calls)" 1
+check "  with a reason naming the battery level" "$(grep -c 'battery at 20%' "$BG/shutdown-calls")" 1
+guard; guard
+check "guard: does not ask for shutdown again after firing" "$(calls)" 1
+reset_bg; power 0 Discharging 20; guard; power 1 Charging 20; guard; power 0 Discharging 20; guard
+check "guard: AC returning in between resets the count" "$(calls)" 0
+reset_bg; power 0 Discharging 25; guard; guard
+check "guard: exactly at the default threshold 25 % acts" "$(calls)" 1
+reset_bg; power 0 Discharging 26; guard; guard
+check "guard: just above the threshold does nothing" "$(calls)" 0
+reset_bg; power 0 Discharging abc; guard; guard
+check "guard: unreadable capacity does nothing" "$(calls)" 0
+reset_bg; power 0 Discharging ''; guard; guard
+check "guard: empty capacity does nothing" "$(calls)" 0
+reset_bg; power 0 Full 10; guard; guard
+check "guard: battery not discharging does nothing" "$(calls)" 0
+reset_bg; power 0 Discharging 40; echo THRESHOLD=45 > "$BG/conf"; guard; guard
+check "guard: THRESHOLD from the config file is used" "$(calls)" 1
+reset_bg; power 0 Discharging 40; printf 'THRESHOLD=99\n' > "$BG/conf"; guard; guard
+check "guard: out-of-range THRESHOLD falls back to 25" "$(calls)" 0
+reset_bg; power 0 Discharging 40; printf 'THRESHOLD=45; touch %s/pwned\n' "$BG" > "$BG/conf"; guard; guard
+check "guard: config file is parsed, not run" "$(test -e "$BG/pwned"; echo $?)" 1
+check "  and a malformed line falls back to 25" "$(calls)" 0
+reset_bg; power 0 Discharging 5; guard --status > "$BG/status.txt"; guard --status >> "$BG/status.txt"
+check "guard --status never shuts down" "$(calls)" 0
+check "  and reports LOW" "$(grep -c 'decision: LOW' "$BG/status.txt")" 2
+reset_bg; rm -rf "$BG/ps/ACAD"; power2() { echo Discharging > "$BG/ps/BAT0/status"; echo 5 > "$BG/ps/BAT0/capacity"; }; power2; guard; guard
+check "guard: no mains adapter found does nothing" "$(calls)" 0
+mkdir -p "$BG/ps/ACAD"; echo Mains > "$BG/ps/ACAD/type"
+reset_bg; power 0 Discharging 20; guard; guard; power 1 Charging 30; guard; power 0 Discharging 20; guard; guard
+check "guard: a second low spell after AC returned fires again" "$(calls)" 2
+reset_bg; power 0 Discharging 20; guard; echo xx > "$BG/ps/BAT0/capacity"; guard; power 0 Discharging 20; guard
+check "guard: an unreadable reading between two lows resets the count" "$(calls)" 0
+reset_bg; mkdir -p "$BG/ps/0mouse"; echo Battery > "$BG/ps/0mouse/type"; echo Device > "$BG/ps/0mouse/scope"
+echo Discharging > "$BG/ps/0mouse/status"; echo 3 > "$BG/ps/0mouse/capacity"; power 0 Discharging 90; guard; guard
+check "guard: a wireless-device battery is ignored" "$(calls)" 0
+rm -rf "$BG/ps/0mouse"
+printf '#!/bin/sh\necho "$*" >> "%s/shutdown-calls"\nexit 1\n' "$BG" > "$BG/failing-shutdown"; chmod +x "$BG/failing-shutdown"
+reset_bg; : > "$BG/log"; power 0 Discharging 20; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard
+check "guard: a failed shutdown is retried next minute" "$(calls)" 2
+check "  and the failure is logged" "$(grep -c 'shutdown FAILED' "$BG/log")" 2
+check "dash -n: battery-guard.sh and its installer" "$(for s in battery-guard.sh install-battery-guard.sh; do "$GSH" -n "$HERE/node/$s" 2>&1; done)" ""
+
 for f in "$HERE/seed/make-ext4-seed.sh" "$HERE"/node/*.sh "$HERE"/node/*.init "$HERE"/test/*.sh; do
   [[ -f $f ]] || continue
   check "syntax and LF endings: $(basename "$f")" "$(bash -n "$f" 2>&1; tr -cd '\r' < "$f" | wc -c)" 0
