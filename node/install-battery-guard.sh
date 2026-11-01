@@ -41,3 +41,4 @@ echo "$S"
 case $S in
     *"cannot read"*) echo "WARNING: it cannot read this machine's battery or AC state, so it will never act. Check /sys/class/power_supply." ;;
 esac
+[ -x /usr/sbin/rtcwake ] || echo "WARNING: /usr/sbin/rtcwake is missing (package util-linux), so no wake alarm is set; the shutdown still works."

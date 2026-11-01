@@ -78,10 +78,15 @@ printf '#!/bin/sh\necho "$*" >> "%s/shutdown-calls"\n' "$BG" > "$BG/fake-shutdow
 power() { echo "$1" > "$BG/ps/ACAD/online"; echo "$2" > "$BG/ps/BAT0/status"; echo "$3" > "$BG/ps/BAT0/capacity"; }
 # Devuan runs /bin/sh = dash; use it when present so the tests run the shell that matters.
 GSH=$(command -v dash || echo sh)
+printf '#!/bin/sh\necho "$*" >> "%s/wake-calls"\necho wake >> "%s/order"\n' "$BG" "$BG" > "$BG/fake-rtcwake"; chmod +x "$BG/fake-rtcwake"
+printf '#!/bin/sh\necho "no RTC" >&2\nexit 1\n' > "$BG/failing-rtcwake"; chmod +x "$BG/failing-rtcwake"
+printf '#!/bin/sh\necho shutdown >> "%s/order"\n' "$BG" >> "$BG/fake-shutdown"
 guard() { BG_POWER_SUPPLY="$BG/ps" BG_STATE_DIR="$BG/state" BG_CONFIG="$BG/conf" BG_SHUTDOWN="${FAKE_SD:-$BG/fake-shutdown}" \
-          "$GSH" "$HERE/node/battery-guard.sh" "$@" 2>>"$BG/log"; }
+          BG_RTCWAKE="${FAKE_WAKE:-$BG/fake-rtcwake}" BG_UPTIME="${FAKE_UP:-$BG/uptime}" "$GSH" "$HERE/node/battery-guard.sh" "$@" 2>>"$BG/log"; }
 calls() { if [[ -f $BG/shutdown-calls ]]; then wc -l < "$BG/shutdown-calls" | tr -d ' '; else echo 0; fi; }
-reset_bg() { rm -rf "$BG/state" "$BG/shutdown-calls" "$BG/conf"; }
+echo "86400.50 100.00" > "$BG/uptime"
+wakes() { if [[ -f $BG/wake-calls ]]; then wc -l < "$BG/wake-calls" | tr -d ' '; else echo 0; fi; }
+reset_bg() { rm -rf "$BG/state" "$BG/shutdown-calls" "$BG/wake-calls" "$BG/order" "$BG/conf"; }
 
 reset_bg; power 1 Charging 10; guard; guard
 check "guard: on AC at 10 % never shuts down" "$(calls)" 0
@@ -131,6 +136,63 @@ printf '#!/bin/sh\necho "$*" >> "%s/shutdown-calls"\nexit 1\n' "$BG" > "$BG/fail
 reset_bg; : > "$BG/log"; power 0 Discharging 20; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard
 check "guard: a failed shutdown is retried next minute" "$(calls)" 2
 check "  and the failure is logged" "$(grep -c 'shutdown FAILED' "$BG/log")" 2
+# wake alarm before a guard shutdown (the BIOS has no power-on-after-AC-loss setting)
+reset_bg; power 0 Discharging 20; guard; guard
+check "wake: a guard shutdown sets the alarm once, 60 min by default" "$(wakes) $(cat "$BG/wake-calls")" "1 -m no -s 3600"
+check "  and sets it before the shutdown" "$(tr '\n' ' ' < "$BG/order")" "wake shutdown "
+guard
+check "  and not again once fired" "$(wakes)" 1
+reset_bg; power 0 Discharging 60; guard; guard; power 1 Charging 5; guard; guard
+check "wake: no alarm when not shutting down" "$(wakes)" 0
+reset_bg; power 0 Discharging 20; guard
+check "wake: no alarm on the first low reading" "$(wakes)" 0
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=120\n' > "$BG/conf"; guard; guard
+check "wake: WAKE_MINUTES from the config file is used" "$(cat "$BG/wake-calls")" "-m no -s 7200"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=5\n' > "$BG/conf"; guard; guard
+check "wake: WAKE_MINUTES below 10 falls back to 60" "$(cat "$BG/wake-calls")" "-m no -s 3600"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=0\n' > "$BG/conf"; guard; guard
+check "wake: WAKE_MINUTES=0 sets no alarm" "$(wakes)" 0
+check "  and still shuts down" "$(calls)" 1
+reset_bg; : > "$BG/log"; power 0 Discharging 10; guard; guard
+check "wake: at the floor (10 %) sets no alarm" "$(wakes)" 0
+check "  and still shuts down" "$(calls)" 1
+check "  and says why in the log" "$(grep -c 'wake floor' "$BG/log")" 1
+reset_bg; power 0 Discharging 11; guard; guard
+check "wake: just above the floor sets the alarm" "$(wakes)" 1
+reset_bg; power 0 Discharging 20; printf 'THRESHOLD=40\nWAKE_FLOOR=30\n' > "$BG/conf"; guard; guard
+check "wake: WAKE_FLOOR from the config file is used" "$(wakes) $(calls)" "0 1"
+reset_bg; : > "$BG/log"; power 0 Discharging 20; FAKE_WAKE="$BG/failing-rtcwake" guard; FAKE_WAKE="$BG/failing-rtcwake" guard
+check "wake: a failing rtcwake does not stop the shutdown" "$(calls)" 1
+check "  and the failure is logged" "$(grep -c 'wake alarm FAILED' "$BG/log")" 1
+reset_bg; power 0 Discharging 20; FAKE_WAKE="$BG/no-such-rtcwake" guard; FAKE_WAKE="$BG/no-such-rtcwake" guard
+check "wake: a missing rtcwake does not stop the shutdown" "$(calls)" 1
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=60; touch %s/pwned2\n' "$BG" > "$BG/conf"; guard; guard
+check "wake: config is parsed, not run" "$(test -e "$BG/pwned2"; echo $?) $(cat "$BG/wake-calls")" "1 -m no -s 3600"
+reset_bg; power 1 Charging 90; guard --status > "$BG/status.txt"
+check "wake: --status names the alarm setting" "$(grep -c 'wake alarm: 60 min' "$BG/status.txt")" 1
+reset_bg; power 1 Charging 90; printf 'WAKE_MINUTES=0\n' > "$BG/conf"; guard --status > "$BG/status.txt"
+check "  and says off when it is off" "$(grep -c 'wake alarm: off' "$BG/status.txt")" 1
+echo "120.00 50.00" > "$BG/uptime-early"
+reset_bg; power 0 Discharging 20; FAKE_UP="$BG/uptime-early" guard; FAKE_UP="$BG/uptime-early" guard; FAKE_UP="$BG/uptime-early" guard
+check "boot: no shutdown in the first 5 minutes after boot" "$(calls) $(wakes)" "0 0"
+guard
+check "  and counting starts afresh once up 5 minutes" "$(calls)" 0
+guard
+check "  then the second reading acts" "$(calls)" 1
+reset_bg; power 0 Discharging 20; FAKE_UP="$BG/no-such-uptime" guard; FAKE_UP="$BG/no-such-uptime" guard
+check "boot: unreadable uptime counts as just booted" "$(calls)" 0
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=010\n' > "$BG/conf"; guard; guard
+check "wake: a leading zero is decimal, not octal" "$(cat "$BG/wake-calls")" "-m no -s 600"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=090\n' > "$BG/conf"; guard; guard
+check "  and 090 is 90, not an error" "$(cat "$BG/wake-calls")" "-m no -s 5400"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=2000\n' > "$BG/conf"; guard; guard
+check "wake: WAKE_MINUTES above 1440 falls back to 60" "$(cat "$BG/wake-calls")" "-m no -s 3600"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=120\r\nTHRESHOLD=30\r\n' > "$BG/conf"; guard; guard
+check "wake: a CRLF config file still reads" "$(cat "$BG/wake-calls")" "-m no -s 7200"
+reset_bg; power 1 Charging 90; printf 'THRESHOLD=10\nWAKE_FLOOR=10\n' > "$BG/conf"; guard --status > "$BG/status.txt"
+check "wake: --status warns when the floor is not below the threshold" "$(grep -c 'never set' "$BG/status.txt")" 1
+reset_bg; power 0 Discharging 20; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD="$BG/failing-shutdown" guard
+check "wake: a retried shutdown sets the alarm again" "$(wakes)" 2
 check "dash -n: battery-guard.sh and its installer" "$(for s in battery-guard.sh install-battery-guard.sh; do "$GSH" -n "$HERE/node/$s" 2>&1; done)" ""
 
 for f in "$HERE/seed/make-ext4-seed.sh" "$HERE"/node/*.sh "$HERE"/node/*.init "$HERE"/test/*.sh; do

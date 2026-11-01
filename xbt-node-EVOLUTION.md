@@ -320,3 +320,14 @@ scrubbed when this project moved to its crypto-side repo.
   neither logged nor retried, a wireless mouse's battery that could be read as the laptop's, and the settings
   file's permissions. Two deliberate breaks of the script were each caught by the tests. Installing it is the
   owner's step (sudo). The lid-on-battery setting went into the owner's BIOS steps instead of code.
+- **Later the same session: coming back after an outage.** The owner looked in the BIOS: no power-on-after-AC-loss
+  setting and no Wake on LAN, so a laptop the guard shut down would stay off until someone pressed the button.
+  The owner chose the agent's proposal: before shutting down, the guard sets the clock's wake alarm (`rtcwake`)
+  for 60 minutes later. If the power is back the node and gateway start as usual; if not, the guard shuts it
+  down again with a new alarm. Below a 10 % floor it sets no alarm, so repeated boots cannot run the battery
+  flat, and a failed alarm never stops the shutdown. A separate review found nothing blocking and four things
+  fixed before commit: a setting written with a leading zero read as octal, a floor at or above the threshold
+  that silently meant no alarm (now shown in `--status`), and the risk of stopping a node that a woken boot was
+  still starting, closed by not acting in the first five minutes after boot; plus missing tests. Three
+  deliberate breaks of the new code were each caught. Whether this laptop wakes from off by its alarm is not
+  yet known: a ten-minute test is in the runbook and is the owner's to run, on battery as well as on AC.

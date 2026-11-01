@@ -161,6 +161,20 @@ starts at boot. These two scripts do it:
   syslog with the tag battery-guard. Keep it above the desktop's own critical
   level, so it acts before any suspend can.
 
+  Coming back after an outage. The HP 14's BIOS has no "power on when AC returns"
+  setting and no Wake on LAN. So before it shuts down, the guard sets the clock's
+  wake alarm for 60 minutes later. If the power is back, the laptop boots and the
+  node and gateway start as usual. If not, it boots on battery and the guard shuts
+  it down again about two minutes later, with a new alarm. At or below 10 % it sets
+  no alarm, so repeated boots never run the battery flat; then only the power
+  button starts it. Settings in the same file: WAKE_MINUTES=60 (0 = off, else
+  10..1440) and WAKE_FLOOR=10 (3..50).
+  Test once that this machine wakes from off (it is also a clean shutdown):
+    sudo /usr/sbin/rtcwake -m no -s 600
+    sudo /usr/sbin/rtcwake -m show
+    sudo shutdown -h now
+  It should switch itself on about 10 minutes later.
+
 
 ========================================================================
 5. RULES FOR RUNNING ON THIS DRIVE
