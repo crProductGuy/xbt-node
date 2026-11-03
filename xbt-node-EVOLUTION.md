@@ -331,3 +331,10 @@ scrubbed when this project moved to its crypto-side repo.
   still starting, closed by not acting in the first five minutes after boot; plus missing tests. Three
   deliberate breaks of the new code were each caught. Whether this laptop wakes from off by its alarm is not
   yet known: a ten-minute test is in the runbook and is the owner's to run, on battery as well as on AC.
+
+## 2026-11-02, session 25a2ab43 (from the gbox project): the clean-shutdown note sent
+
+A short entry, written from a gbox session. Session E's review of how the node stops cleanly ended in a note for
+the PyBLOCK project, drafted in the owner's voice and kept out of the repo on purpose. The owner asked for the draft
+("quick like a bunny grab me the Pyblock draft"), then reported "Sent!" to the PyBLOCK project's lead. Nothing in
+the node changed. Any reply will be recorded here and in the status file.
