@@ -139,6 +139,13 @@ starts at boot. These two scripts do it:
   Install (copy the three files to ~/init first):
     sudo sh ~/init/install-autostart.sh YOURNAME
   It changes nothing that is running; the scripts take over at the next boot.
+  The drive check is chosen by the installer and written as MNT= in
+  /etc/default/bitcoind. By default it uses bitcoin.conf's blocksdir if that is a
+  mount point in /etc/fstab (here /mnt/passport); with blocks on the internal disk
+  there is no check. Force it with a second argument: none, or a mount point.
+  If you update /etc/init.d/bitcoind by hand, rerun the installer too: an older
+  /etc/default/bitcoind has no MNT line, and while bitcoin.conf sets blocksdir the
+  new script then refuses to start the node (safe, but the node stays down).
 
   Everyday:   sudo service bitcoind status|start|stop    (same for datum-gateway)
   Remove:     sudo update-rc.d datum-gateway remove ; sudo update-rc.d bitcoind remove

@@ -338,3 +338,18 @@ A short entry, written from a gbox session. Session E's review of how the node s
 the PyBLOCK project, drafted in the owner's voice and kept out of the repo on purpose. The owner asked for the draft
 ("quick like a bunny grab me the Pyblock draft"), then reported "Sent!" to the PyBLOCK project's lead. Nothing in
 the node changed. Any reply will be recorded here and in the status file.
+- **2026-11-04, session E resumed: PyBLOCK's two requests.** The owner relayed that the PyBLOCK team ran the
+  battery guard in a simulated low-battery run and found it "behaves exactly as documented", and that their lead
+  would publish the Devuan scripts as the PATUM guide for distros without systemd after two changes: make the
+  external block-drive check optional so machines with blocks on the internal disk work, and refresh the node
+  init script's header, which still said it had never run on Linux. Built: the drive check is off unless a
+  mount point is named, and the installer chooses it itself from the node's blocksdir and /etc/fstab, with a
+  manual override. So a reinstall on this node keeps the protection while others need no change. The rdts
+  requirement in the installer was kept and put to the owner as a question rather than changed silently.
+  A separate review found one serious gap: on a machine set up before this change, replacing only the init
+  script would have silently dropped the drive check, exactly the failure it exists to prevent. Fixed by
+  having the script refuse to start the node, with the fix named in the message, when the settings file
+  predates the drive setting and the node's config moves its blocks. Also fixed: a blocks folder inside the
+  drive rather than at its top is now matched to the drive, spaces around "=" are read, and the settings file
+  is written quoted, with unsafe paths refused. 116 tests pass; three deliberate breaks, two caught, the third
+  a check that turned out to be redundant.

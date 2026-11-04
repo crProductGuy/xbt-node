@@ -195,6 +195,70 @@ reset_bg; power 0 Discharging 20; FAKE_SD="$BG/failing-shutdown" guard; FAKE_SD=
 check "wake: a retried shutdown sets the alarm again" "$(wakes)" 2
 check "dash -n: battery-guard.sh and its installer" "$(for s in battery-guard.sh install-battery-guard.sh; do "$GSH" -n "$HERE/node/$s" 2>&1; done)" ""
 
+
+# devuan-bitcoind.init drive check and install-autostart.sh's choice of MNT (D-038)
+IT="$WORK/init"; mkdir -p "$IT/drive/blocks/index"
+dr() { "$GSH" -c "$(sed -n '/^drive_ready()/,/^}/p' "$HERE/node/devuan-bitcoind.init")
+  mountpoint() { [ \"\$2\" = \"$IT/drive\" ]; }; mount() { return 1; }; sleep() { :; }
+  MNT='$1'; MOUNT_WAIT=0; drive_ready"; echo $?; }
+check "init: MNT starts as 'unset', not as a setting" "$(grep -c '^MNT=@unset@$' "$HERE/node/devuan-bitcoind.init")" 1
+check "init: empty MNT means ready, no wait" "$(dr '')" 0
+check "init: a set MNT that is not mounted is not ready" "$(dr "$IT/missing")" 1
+check "init: a mounted MNT is ready" "$(dr "$IT/drive")" 0
+rmdir "$IT/drive/blocks/index"
+check "init: a mounted MNT is ready without blocks/index (Knots keeps the index in the datadir)" "$(dr "$IT/drive")" 0
+# mnt_problem: an /etc/default/bitcoind from before MNT existed (no MNT line at all)
+mp() { "$GSH" -c "NAME=bitcoind; DATADIR='$IT/dd'; MNT='$1'
+  $(sed -n '/^mnt_problem()/,/^}/p' "$HERE/node/devuan-bitcoind.init")
+  mnt_problem"; echo "rc=$?"; }
+mkdir -p "$IT/dd"; printf 'txindex=1\nblocksdir=/mnt/passport\n' > "$IT/dd/bitcoin.conf"
+check "init: no MNT line + blocksdir in bitcoin.conf refuses to start" "$(mp @unset@ | tail -1)" "rc=1"
+check "  and says what to do" "$(mp @unset@ | grep -c 'Rerun install-autostart.sh')" 1
+printf 'txindex=1\n blocksdir = /mnt/passport\n' > "$IT/dd/bitcoin.conf"
+check "init: blocksdir with spaces around = also refuses" "$(mp @unset@ | tail -1)" "rc=1"
+printf 'txindex=1\n#blocksdir=/mnt/passport\n' > "$IT/dd/bitcoin.conf"
+check "init: no MNT line and no blocksdir starts with no check" "$(mp @unset@)" "rc=0"
+printf 'blocksdir=/mnt/passport\n' > "$IT/dd/bitcoin.conf"
+check "init: MNT= (empty, set by the owner) with blocksdir starts" "$(mp '')" "rc=0"
+check "init: MNT set with blocksdir starts (drive_ready decides)" "$(mp /mnt/passport)" "rc=0"
+ds=$(sed -n '/^do_start()/,/^}/p' "$HERE/node/devuan-bitcoind.init")
+check "init: do_start checks mnt_problem before the drive" "$(( $(echo "$ds" | grep -n 'mnt_problem' | cut -d: -f1) < $(echo "$ds" | grep -n 'drive_ready' | cut -d: -f1) ))" 1
+check "init: header no longer says it was never run" "$(grep -ci 'not yet run' "$HERE/node/devuan-bitcoind.init")" 0
+pm() { "$GSH" -c "$(sed -n '/^pick_mnt()/,/^}/p' "$HERE/node/install-autostart.sh")"'; pick_mnt "$1" "$2" "$3"' sh "$IT/conf" "$IT/fstab" "$1"; echo "rc=$?"; }
+printf 'UUID=abc /mnt/passport ext4 noatime,nofail 0 2\nUUID=def / ext4 defaults 0 1\n' > "$IT/fstab"
+printf 'txindex=1\nblocksdir=/mnt/passport\nconsensusrules=rdts\n' > "$IT/conf"
+check "autostart: blocksdir on an fstab mount point is checked" "$(pm auto | tr '\n' ' ')" "/mnt/passport rc=0 "
+printf 'txindex=1\nconsensusrules=rdts\n' > "$IT/conf"
+check "autostart: no blocksdir means no drive check" "$(pm auto | tr '\n' ' ')" "rc=0 "
+printf 'blocksdir=/home/nodeuser/blocks\n' > "$IT/conf"
+check "autostart: blocksdir on the internal disk means no drive check" "$(pm auto | tr '\n' ' ')" "rc=0 "
+printf 'blocksdir=/mnt/passport/\r\n' > "$IT/conf"
+check "autostart: trailing slash and CRLF still match" "$(pm auto | tr '\n' ' ')" "/mnt/passport rc=0 "
+printf '# blocksdir=/mnt/passport\n' > "$IT/conf"
+check "autostart: a commented blocksdir is ignored" "$(pm auto | tr '\n' ' ')" "rc=0 "
+printf 'blocksdir=/mnt/passport\n' > "$IT/conf"; printf '#UUID=abc /mnt/passport ext4 defaults 0 2\n' > "$IT/fstab"
+check "autostart: a commented fstab line does not count" "$(pm auto | tr '\n' ' ')" "rc=0 "
+printf 'UUID=abc /mnt/passport ext4 noatime,nofail 0 2\n' > "$IT/fstab"
+check "autostart: none turns the check off" "$(pm none | tr '\n' ' ')" "rc=0 "
+check "autostart: an explicit mount point is used" "$(pm /mnt/other | tr '\n' ' ')" "/mnt/other rc=0 "
+check "autostart: anything else is refused" "$(pm bogus 2>/dev/null | tr '\n' ' ')" "rc=1 "
+check "autostart: no longer requires blocksdir=/mnt/passport" "$(grep -c "grep -q '^blocksdir=/mnt/passport'" "$HERE/node/install-autostart.sh")" 0
+check "autostart: writes MNT, quoted, to /etc/default/bitcoind" "$(grep -c "MNT='%s'" "$HERE/node/install-autostart.sh")" 1
+printf 'blocksdir=/mnt/passport/bitcoin/blocks\n' > "$IT/conf"
+check "autostart: blocksdir in a folder on the drive picks the drive" "$(pm auto | tr '\n' ' ')" "/mnt/passport rc=0 "
+printf 'blocksdir=/mnt/passportx\n' > "$IT/conf"
+check "autostart: a look-alike path does not match" "$(pm auto | tr '\n' ' ')" "rc=0 "
+printf '  blocksdir = /mnt/passport\n' > "$IT/conf"
+check "autostart: spaces around = still match" "$(pm auto | tr '\n' ' ')" "/mnt/passport rc=0 "
+printf 'UUID=abc /mnt ext4 defaults 0 2\nUUID=def /mnt/passport ext4 nofail 0 2\nUUID=r / ext4 defaults 0 1\n' > "$IT/fstab"
+printf 'blocksdir=/mnt/passport/b\n' > "$IT/conf"
+check "autostart: the deepest mount point wins" "$(pm auto | tr '\n' ' ')" "/mnt/passport rc=0 "
+printf 'blocksdir=/srv/blocks\n' > "$IT/conf"
+check "autostart: the root filesystem never counts" "$(pm auto | tr '\n' ' ')" "rc=0 "
+check "autostart: a mount point with a space is refused" "$(pm '/mnt/my drive' 2>/dev/null | tr '\n' ' ')" "rc=1 "
+check "autostart: a mount point with a quote is refused" "$(pm "/mnt/it's" 2>/dev/null | tr '\n' ' ')" "rc=1 "
+printf "BITCOIN_USER='nodeuser'\nMNT='/mnt/passport'\n" > "$IT/defaults"
+check "autostart: the quoted defaults file sources cleanly" "$("$GSH" -c ". '$IT/defaults'; echo \"\$BITCOIN_USER \$MNT\"")" "nodeuser /mnt/passport"
 for f in "$HERE/seed/make-ext4-seed.sh" "$HERE"/node/*.sh "$HERE"/node/*.init "$HERE"/test/*.sh; do
   [[ -f $f ]] || continue
   check "syntax and LF endings: $(basename "$f")" "$(bash -n "$f" 2>&1; tr -cd '\r' < "$f" | wc -c)" 0

@@ -5,17 +5,19 @@
 # Required-Stop:     $local_fs $remote_fs $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Bitcoin Knots node with its blocks on an external drive
-# Description:       Starts the node only when the external drive is mounted, and on
-#                    shutdown waits for the node to exit cleanly before the drive is
-#                    unmounted. It never force-kills the node.
+# Short-Description: Bitcoin Knots node, clean stop at shutdown
+# Description:       Starts the node at boot (optionally only once its external block
+#                    drive is mounted) and on shutdown waits for the node to exit
+#                    cleanly. It never force-kills the node.
 ### END INIT INFO
 #
-# devuan-bitcoind.init: DEVUAN (sysvinit) ONLY. For Ubuntu use ubuntu-bitcoind.service.
-# Written on Windows; NOT yet run on Linux. Full instructions: README-LINUX-NODE.txt.
+# devuan-bitcoind.init: DEVUAN (sysvinit) ONLY, or any system without systemd that has
+# start-stop-daemon and /lib/lsb/init-functions. For Ubuntu use ubuntu-bitcoind.service.
+# In use on Devuan 6 under PATUM since 2026-10-21, through several reboots; every stop in
+# the node's log from 22 to 31 October ended "Shutdown: done" within seconds.
 #
-# INSTALL (as root), after seed-node.sh has finished and the node has run once by hand:
-#   install -m 755 /mnt/passport/devuan-bitcoind.init /etc/init.d/bitcoind
+# INSTALL: install-autostart.sh does all of this for the PATUM layout. By hand, as root:
+#   install -m 755 devuan-bitcoind.init /etc/init.d/bitcoind
 #   printf 'BITCOIN_USER=yourname\nBITCOIND=/full/path/to/bitcoind\n' > /etc/default/bitcoind
 #   update-rc.d bitcoind defaults
 #   service bitcoind start ; service bitcoind status
@@ -23,13 +25,22 @@
 #   service bitcoind stop ; update-rc.d bitcoind remove ; rm /etc/init.d/bitcoind
 #
 # Settings live in /etc/default/bitcoind. BITCOIN_USER is required; the rest have defaults.
+#   DATADIR      default ~BITCOIN_USER/.bitcoin
+#   MNT          mount point of the external drive that holds bitcoin.conf's blocksdir
+#                (the blocksdir itself, or a folder above it). Set it, and the node never
+#                starts unless that drive is mounted, so a missing drive cannot make it
+#                rebuild its blocks on the internal disk. MNT= (empty) = no drive check,
+#                for blocks on the internal disk. install-autostart.sh sets it.
+#                With NO MNT line at all (an /etc/default/bitcoind from before this
+#                setting existed), the node is not started while bitcoin.conf sets
+#                blocksdir: rerun install-autostart.sh, or add an MNT line by hand.
 
 NAME=bitcoind
 BITCOIN_USER=
 BITCOIND=/usr/local/bin/bitcoind
 DATADIR=
-MNT=/mnt/passport
-MOUNT_WAIT=90     # seconds to wait at boot for the USB drive to appear
+MNT=@unset@
+MOUNT_WAIT=90     # seconds to wait at boot for the USB drive to appear (only with MNT)
 STOP_WAIT=900     # seconds to wait for a clean exit before giving up (never kills)
 
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
@@ -47,7 +58,7 @@ check_config() {
     fi
     [ -n "$DATADIR" ] || DATADIR="$(getent passwd "$BITCOIN_USER" | cut -d: -f6)/.bitcoin"
     if [ ! -d "$DATADIR/chainstate" ]; then
-        log_failure_msg "$NAME: $DATADIR/chainstate is missing. Run seed-node.sh first"; exit 6
+        log_failure_msg "$NAME: $DATADIR/chainstate is missing. Wrong DATADIR, or the node has never run"; exit 6
     fi
     PIDFILE="$DATADIR/bitcoind.pid"
 }
@@ -56,8 +67,23 @@ is_running() {
     start-stop-daemon --status --pidfile "$PIDFILE" --exec "$BITCOIND" >/dev/null 2>&1
 }
 
+# An /etc/default/bitcoind with no MNT line predates the setting. Refuse to guess when
+# bitcoin.conf moves the blocks elsewhere: starting without the drive is the one failure
+# the check exists to stop. Prints the reason and returns 1 when the start must not go on.
+mnt_problem() {
+    [ "$MNT" = "@unset@" ] || return 0
+    if grep -qE '^[[:space:]]*blocksdir[[:space:]]*=' "$DATADIR/bitcoin.conf" 2>/dev/null; then
+        echo "bitcoin.conf sets blocksdir, but /etc/default/$NAME has no MNT line. Rerun install-autostart.sh, or add MNT=<drive mount point> (MNT= for no check)"
+        return 1
+    fi
+    MNT=
+    return 0
+}
+
 # The drive is USB and may show up after this script runs at boot, so wait for it.
+# With MNT empty the blocks are on the internal disk and there is nothing to wait for.
 drive_ready() {
+    [ -z "$MNT" ] && return 0
     waited=0
     while ! mountpoint -q "$MNT"; do
         mount "$MNT" >/dev/null 2>&1 && break
@@ -65,15 +91,20 @@ drive_ready() {
         sleep 5
         waited=$((waited + 5))
     done
-    [ -d "$MNT/blocks/index" ]
+    return 0
 }
 
 do_start() {
     if is_running; then
         log_success_msg "$NAME is already running"; return 0
     fi
+    if ! why=$(mnt_problem); then
+        log_failure_msg "$NAME: NOT started. $why"
+        return 1
+    fi
+    [ "$MNT" = "@unset@" ] && MNT=
     if ! drive_ready; then
-        log_failure_msg "$NAME: NOT started. $MNT is not mounted or has no blocks/index. Plug in the drive, then: service $NAME start"
+        log_failure_msg "$NAME: NOT started. $MNT is not mounted. Plug in the drive, then: service $NAME start"
         return 1
     fi
     log_daemon_msg "Starting Bitcoin Knots" "$NAME"
