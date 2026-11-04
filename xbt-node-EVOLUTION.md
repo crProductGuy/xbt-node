@@ -353,3 +353,12 @@ the node changed. Any reply will be recorded here and in the status file.
   drive rather than at its top is now matched to the drive, spaces around "=" are read, and the settings file
   is written quoted, with unsafe paths refused. 116 tests pass; three deliberate breaks, two caught, the third
   a check that turned out to be redundant.
+- **2026-11-04, later: the wake test written down for anyone.** The owner asked for exact steps to run the
+  wake test, kept in the repo and in the PyBLOCK folder "so people can see how to verify on their own systems",
+  made "as universal as practical" with what helps on more capable hardware. Written as one plain-text guide:
+  the exact tests (on AC, on battery, and the full guard path on a real drain, with the log lines to expect),
+  what to check in the firmware if it does not wake, and the other ways a machine comes back after an outage:
+  power on after AC loss on desktops (with the warning that "last state" stays off after a clean shutdown),
+  business laptops' power-on-with-AC setting, a UPS that signals a shutdown, Wake on LAN with its outage
+  caveats, server management controllers, single-board computers, and a smart plug only when the machine is
+  already off. BIOS setting names are labelled as typical, not checked against any one model.
