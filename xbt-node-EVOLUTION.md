@@ -362,3 +362,15 @@ the node changed. Any reply will be recorded here and in the status file.
   business laptops' power-on-with-AC setting, a UPS that signals a shutdown, Wake on LAN with its outage
   caveats, server management controllers, single-board computers, and a smart plug only when the machine is
   already off. BIOS setting names are labelled as typical, not checked against any one model.
+
+## 2026-11-04 evening, session E resumed (79d5edad): first RTC wake tests on the HP 14
+
+The owner ran Tests 1 and 2 from the new guide. Reported: "wake test on AC failed; never woke, and the
+time looked right when I checked it in step 3 ... ran test 2. That succeeded (lid was open as
+recommended), and uptime value was 15-20 sec after the alarm time." The agent read the sudo log, wtmp
+and debug.log over SSH before saying anything: Test 1's alarm was due 6 minutes before the owner pressed
+the button, Test 2 woke 22 seconds after its alarm, and every stop ended cleanly. The two shutdown
+sequences in syslog look alike, so the logs do not explain the AC failure. A wake on battery but not on
+AC is the reverse of the usual laptop pattern; the agent did not name a cause and proposed repeating Test 1
+with the lid open (D-040). The guard sets its alarm only on battery, so the case it exists for passed.
+Results recorded in the guide's results section.
