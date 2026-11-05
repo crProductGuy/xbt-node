@@ -51,7 +51,7 @@ wireless mice and keyboards are ignored.
 
 "Cleanly" means the normal shutdown path: the gateway's init script stops
 first, then the node's, which gives the node up to 15 minutes to flush. See
-[Install the init scripts](install.md).
+[Auto-start at boot](install.md).
 
 ## The wake alarm
 

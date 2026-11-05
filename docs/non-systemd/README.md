@@ -20,8 +20,8 @@ Read in this order:
 
 0. [Build tools for the DATUM gateway](build-tools.md): the packages to
    install before PATUM's own setup, which a stock Devuan does not have.
-1. [Install the init scripts](install.md): what they assume, the install
-   command, the block-drive check, and the panel.
+1. [Auto-start at boot](install.md): what they assume, the install
+   command, the block-drive check, the panel and the daily update check.
 2. [Battery guard](battery-guard.md): laptops only. How it decides, its
    settings, and the wake alarm.
 3. [Machine settings](machine-settings.md): firmware, lid, power, network,
@@ -55,7 +55,7 @@ One machine, set up between October and November 2026:
 
 - HP Laptop 14-fq0xxx, AMI BIOS F.52, dual boot with Windows;
 - Devuan 6 with sysvinit, Xfce on slim, elogind and upowerd;
-- PATUM 0.5.7, Bitcoin Knots 29.4.3 with `consensusrules=rdts`, and the DATUM
+- PATUM 0.5.7 (0.5.9 by 4 November), Bitcoin Knots 29.4.3 with `consensusrules=rdts`, and the DATUM
   gateway on WAVICLES, with two miners pointed at it;
 - block files on an external USB drive.
 

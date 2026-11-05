@@ -1,9 +1,16 @@
-# Install the init scripts
+# Auto-start at boot
 
-PATUM sets up its node, its DATUM gateway and its web panel for systemd. On
-Devuan, or any Debian-family system that boots with sysvinit, none of them
-starts at boot. Three init scripts do that job, and stop the node and gateway
-cleanly at shutdown.
+PATUM sets up its node, its DATUM gateway, its web panel and a daily update
+check for systemd. On Devuan, or any Debian-family system that boots with
+sysvinit, none of them runs by itself. Three init scripts and one cron entry
+do that job, and stop the node and gateway cleanly at shutdown.
+
+| What | On systemd, PATUM uses | On Devuan, these scripts use |
+|---|---|---|
+| Node | its own setup | `/etc/init.d/bitcoind` |
+| DATUM gateway | its own setup | `/etc/init.d/datum-gateway` |
+| Web panel | an always-on service | `/etc/init.d/patum-panel` |
+| Daily update check | a timer | `/etc/cron.d/patum-check` |
 
 ## What the scripts do
 
@@ -62,6 +69,7 @@ by hand, so the settings file matches.
 To undo:
 
 ```
+sudo rm /etc/cron.d/patum-check
 sudo update-rc.d patum-panel remove
 sudo update-rc.d datum-gateway remove
 sudo update-rc.d bitcoind remove
@@ -103,6 +111,34 @@ ssh -L 32999:127.0.0.1:32999 YOURNAME@<node>
 
 The panel's log is `/var/log/patum-panel.out`. Check or restart it with
 `sudo service patum-panel status` or `sudo service patum-panel restart`.
+
+## The daily update check
+
+On systemd, PATUM checks for updates once a day from a timer. Devuan never
+runs that timer, so PATUM never looks for updates by itself.
+`install-panel-autostart.sh` adds `/etc/cron.d/patum-check`, which runs
+`patum -check` as the node's user once a day, at a random time between 03:00
+and 05:59 so that not every node asks at once.
+
+It only checks; it never installs anything. Each run adds a time and one line
+to `~/pyblock-node/patum-check.log`, for example:
+
+```
+2026-11-05T04:17:01-05:00
+PyBLØCK: up to date (PATUM v0.5.9).
+```
+
+Read the latest result:
+
+```
+tail -2 ~/pyblock-node/patum-check.log
+```
+
+When it reports an update, update as PATUM describes, as yourself and not
+with `sudo`: `~/pyblock-node/bin/patum -update`. The panel does not read this
+log; it is for you.
+
+To stop the check: `sudo rm /etc/cron.d/patum-check`.
 
 ## The block-drive check
 

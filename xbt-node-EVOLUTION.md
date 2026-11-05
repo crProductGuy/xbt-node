@@ -430,3 +430,15 @@ The owner installed the panel's init script and removed the systemctl shim. Chec
 starts the node, gateway, panel in that order and stops them in reverse; the panel runs from the init
 script's pid file on 127.0.0.1:32999 and answers; the node and gateway kept their pids. A real reboot is
 still to come.
+
+The owner then answered two open choices: "D-044 yes, and D-039 Yes. All Pyblock's PATUM users are running rdts."
+So the installer keeps its hard rdts requirement. For D-044 the agent first ran `patum -check` once on
+the laptop: it printed "up to date (PATUM v0.5.9)" and touched no file, so the panel does not read its
+result and a daily run needs its own log. Built: `install-panel-autostart.sh` also writes
+`/etc/cron.d/patum-check`, a check-only run as the node's user at a random time from 03:00 to 05:59 (so
+nodes do not all ask PyBLOCK in one minute), appending a timestamp and the result to
+`~/pyblock-node/patum-check.log`. The cron line carries no % sign, which cron would cut. The install page
+is now "Auto-start at boot", with a table of what PATUM uses on systemd and what replaces it here. Two
+intermittent suite failures this evening (wake checks once, the PowerShell manifest checks once) matched
+the PC's commit charge at 89 % with a 9.6 GB kernel pool, the known leak, not the code; reruns passed.
+Suite 142/142.

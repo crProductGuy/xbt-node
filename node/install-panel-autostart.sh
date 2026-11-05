@@ -6,10 +6,20 @@
 #   e.g.  sudo sh install-panel-autostart.sh YOURNAME
 #
 # Installs devuan-patum-panel.init (from this script's folder) as /etc/init.d/patum-panel,
-# writes /etc/default/patum-panel and registers it. install-autostart.sh runs this too.
+# writes /etc/default/patum-panel and registers it. Also writes /etc/cron.d/patum-check:
+# PATUM's daily update check, which on systemd runs from a timer. These are PATUM's two
+# services. install-autostart.sh runs this too.
 # It does NOT start or stop anything now; a panel that is already running keeps running.
-# Safe to run again. Undo:  update-rc.d patum-panel remove
+# Safe to run again. Undo:  update-rc.d patum-panel remove; rm /etc/cron.d/patum-check
 set -eu
+
+# check_cron_line USER HOME MINUTE HOUR  prints the /etc/cron.d line for PATUM's daily update
+# check. PATUM runs it from a systemd timer, which Devuan never runs. It only checks and
+# prints; nothing is installed. No % in the line: cron would turn it into a newline.
+check_cron_line() {
+    printf '%s %s * * * %s { date -Is; %s/pyblock-node/bin/patum -check; } >> %s/pyblock-node/patum-check.log 2>&1\n' \
+        "$3" "$4" "$1" "$2" "$2"
+}
 
 # valid_port PORT  succeeds for a number from 1024 to 65535.
 valid_port() {
@@ -34,7 +44,14 @@ install -m 755 "$HERE/devuan-patum-panel.init" /etc/init.d/patum-panel
 printf "PANEL_USER='%s'\nPANEL_PORT=%s\n" "$U" "$PORT" > /etc/default/patum-panel
 update-rc.d patum-panel defaults
 
+# A random time between 03:00 and 05:59, so not every node asks PyBLOCK in the same minute.
+R=$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')
+{ echo "# PATUM daily update check (from xbt-node install-panel-autostart.sh); check only"
+  check_cron_line "$U" "$H" $((R % 60)) $((3 + R / 60 % 3)); } > /etc/cron.d/patum-check
+chmod 644 /etc/cron.d/patum-check
+
 echo
+echo "daily update check: $(tail -1 /etc/cron.d/patum-check | cut -d' ' -f1,2) (minute hour), result in $H/pyblock-node/patum-check.log"
 echo "panel installed: starts at boot after the gateway, at http://127.0.0.1:$PORT/"
 echo "from another machine:  ssh -L $PORT:127.0.0.1:$PORT $U@<this-machine>"
 service patum-panel status || true

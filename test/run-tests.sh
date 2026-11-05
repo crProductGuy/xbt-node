@@ -305,6 +305,12 @@ check "panel: starts after the gateway, stops before it" "$(grep -cE '^# Require
 vp() { "$GSH" -c "$(sed -n '/^valid_port()/,/^}/p' "$HERE/node/install-panel-autostart.sh"); valid_port '$1' && echo ok || echo no"; }
 check "panel installer: port 32999 is accepted" "$(vp 32999)" ok
 check "panel installer: ports below 1024, above 65535, or not numbers are refused" "$(vp 80) $(vp 70000) $(vp 3x) $(vp '')" "no no no no"
+ccl=$("$GSH" -c "$(sed -n '/^check_cron_line()/,/^}/p' "$HERE/node/install-panel-autostart.sh"); check_cron_line nodeuser /home/nodeuser 17 4")
+check "update check: cron line runs patum -check daily as the user, logged" "$ccl" \
+  "17 4 * * * nodeuser { date -Is; /home/nodeuser/pyblock-node/bin/patum -check; } >> /home/nodeuser/pyblock-node/patum-check.log 2>&1"
+check "  with no % (cron would cut the line there)" "$(grep -c '%' <<<"$ccl")" 0
+check "  and the line runs under dash" "$("$GSH" -n -c "$(cut -d' ' -f7- <<<"$ccl")" 2>&1; echo $?)" 0
+check "  written to /etc/cron.d/patum-check (no dot, so cron reads it)" "$(grep -c '> /etc/cron.d/patum-check$' "$HERE/node/install-panel-autostart.sh")" 1
 check "autostart installer runs the panel installer" "$(grep -c 'install-panel-autostart.sh" "$U"' "$HERE/node/install-autostart.sh")" 1
 
 # docs/non-systemd: every relative link and #anchor resolves, and the checksums match the scripts
