@@ -80,13 +80,16 @@ power() { echo "$1" > "$BG/ps/ACAD/online"; echo "$2" > "$BG/ps/BAT0/status"; ec
 GSH=$(command -v dash || echo sh)
 printf '#!/bin/sh\necho "$*" >> "%s/wake-calls"\necho wake >> "%s/order"\n' "$BG" "$BG" > "$BG/fake-rtcwake"; chmod +x "$BG/fake-rtcwake"
 printf '#!/bin/sh\necho "no RTC" >&2\nexit 1\n' > "$BG/failing-rtcwake"; chmod +x "$BG/failing-rtcwake"
+printf '#!/bin/sh\necho "$*" >> "%s/hwclock-calls"\necho hwclock >> "%s/order"\n' "$BG" "$BG" > "$BG/fake-hwclock"; chmod +x "$BG/fake-hwclock"
+printf '#!/bin/sh\necho "no RTC" >&2\nexit 1\n' > "$BG/failing-hwclock"; chmod +x "$BG/failing-hwclock"
 printf '#!/bin/sh\necho shutdown >> "%s/order"\n' "$BG" >> "$BG/fake-shutdown"
 guard() { BG_POWER_SUPPLY="$BG/ps" BG_STATE_DIR="$BG/state" BG_CONFIG="$BG/conf" BG_SHUTDOWN="${FAKE_SD:-$BG/fake-shutdown}" \
-          BG_RTCWAKE="${FAKE_WAKE:-$BG/fake-rtcwake}" BG_UPTIME="${FAKE_UP:-$BG/uptime}" "$GSH" "$HERE/node/battery-guard.sh" "$@" 2>>"$BG/log"; }
+          BG_RTCWAKE="${FAKE_WAKE:-$BG/fake-rtcwake}" BG_HWCLOCK="${FAKE_HWC:-$BG/fake-hwclock}" BG_UPTIME="${FAKE_UP:-$BG/uptime}" "$GSH" "$HERE/node/battery-guard.sh" "$@" 2>>"$BG/log"; }
 calls() { if [[ -f $BG/shutdown-calls ]]; then wc -l < "$BG/shutdown-calls" | tr -d ' '; else echo 0; fi; }
 echo "86400.50 100.00" > "$BG/uptime"
 wakes() { if [[ -f $BG/wake-calls ]]; then wc -l < "$BG/wake-calls" | tr -d ' '; else echo 0; fi; }
-reset_bg() { rm -rf "$BG/state" "$BG/shutdown-calls" "$BG/wake-calls" "$BG/order" "$BG/conf"; }
+reset_bg() { rm -rf "$BG/state" "$BG/shutdown-calls" "$BG/wake-calls" "$BG/hwclock-calls" "$BG/order" "$BG/conf"; }
+hwcs() { if [[ -f $BG/hwclock-calls ]]; then wc -l < "$BG/hwclock-calls" | tr -d ' '; else echo 0; fi; }
 
 reset_bg; power 1 Charging 10; guard; guard
 check "guard: on AC at 10 % never shuts down" "$(calls)" 0
@@ -139,7 +142,8 @@ check "  and the failure is logged" "$(grep -c 'shutdown FAILED' "$BG/log")" 2
 # wake alarm before a guard shutdown (the BIOS has no power-on-after-AC-loss setting)
 reset_bg; power 0 Discharging 20; guard; guard
 check "wake: a guard shutdown sets the alarm once, 60 min by default" "$(wakes) $(cat "$BG/wake-calls")" "1 -m no -s 3600"
-check "  and sets it before the shutdown" "$(tr '\n' ' ' < "$BG/order")" "wake shutdown "
+check "  and saves the time to the RTC first, then the alarm, then the shutdown" "$(tr '\n' ' ' < "$BG/order")" "hwclock wake shutdown "
+check "  with hwclock --systohc (keeps the local or UTC choice in /etc/adjtime)" "$(cat "$BG/hwclock-calls")" "--systohc"
 guard
 check "  and not again once fired" "$(wakes)" 1
 reset_bg; power 0 Discharging 60; guard; guard; power 1 Charging 5; guard; guard
@@ -166,6 +170,17 @@ check "wake: a failing rtcwake does not stop the shutdown" "$(calls)" 1
 check "  and the failure is logged" "$(grep -c 'wake alarm FAILED' "$BG/log")" 1
 reset_bg; power 0 Discharging 20; FAKE_WAKE="$BG/no-such-rtcwake" guard; FAKE_WAKE="$BG/no-such-rtcwake" guard
 check "wake: a missing rtcwake does not stop the shutdown" "$(calls)" 1
+reset_bg; : > "$BG/log"; power 0 Discharging 20; FAKE_HWC="$BG/failing-hwclock" guard; FAKE_HWC="$BG/failing-hwclock" guard
+check "rtc: a failing hwclock still sets the alarm and shuts down" "$(wakes) $(calls)" "1 1"
+check "  and the failure is logged" "$(grep -c 'saving the time to the RTC FAILED' "$BG/log")" 1
+reset_bg; power 0 Discharging 20; FAKE_HWC="$BG/no-such-hwclock" guard; FAKE_HWC="$BG/no-such-hwclock" guard
+check "rtc: a missing hwclock still sets the alarm and shuts down" "$(wakes) $(calls)" "1 1"
+reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=0\n' > "$BG/conf"; guard; guard
+check "rtc: no hwclock write when the alarm is off" "$(hwcs) $(calls)" "0 1"
+reset_bg; power 0 Discharging 10; guard; guard
+check "rtc: no hwclock write at the wake floor" "$(hwcs) $(calls)" "0 1"
+reset_bg; power 0 Discharging 20; guard
+check "rtc: no hwclock write on the first low reading" "$(hwcs)" 0
 reset_bg; power 0 Discharging 20; printf 'WAKE_MINUTES=60; touch %s/pwned2\n' "$BG" > "$BG/conf"; guard; guard
 check "wake: config is parsed, not run" "$(test -e "$BG/pwned2"; echo $?) $(cat "$BG/wake-calls")" "1 -m no -s 3600"
 reset_bg; power 1 Charging 90; guard --status > "$BG/status.txt"

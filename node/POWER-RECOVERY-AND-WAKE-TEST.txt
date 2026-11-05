@@ -19,7 +19,9 @@ PART A. THE BATTERY GUARD'S WAKE ALARM: EXACT TEST STEPS
 ========================================================================
 
 What is being tested. Before battery-guard.sh shuts a laptop down on low battery,
-it sets the computer's real-time clock (RTC) alarm with
+it saves the system time into the computer's real-time clock (RTC) and sets
+the RTC's alarm:
+    hwclock --systohc
     rtcwake -m no -s 3600
 which asks the firmware to switch the machine on 60 minutes later. Most x86
 machines can do this, but not all, and some only on AC power. These tests find
@@ -41,8 +43,15 @@ Check 0: the machine has an RTC with a wake alarm (read-only)
 
 Test 1: wake from off, on AC power
   1. Plug the AC adapter in.
-  2. Set an alarm 10 minutes ahead:
+  2. Save the system time into the RTC, then set an alarm 10 minutes ahead:
+        sudo /sbin/hwclock --systohc
         sudo /usr/sbin/rtcwake -m no -s 600
+     Do not skip the hwclock line. rtcwake counts from the RTC's own time, and
+     Linux writes the RTC only at shutdown. On a machine whose RTC keeps local
+     time (usual with a Windows dual boot) that stayed up across a
+     daylight-saving change, the RTC is an hour off and the alarm lands an hour
+     late or in the past. The time rtcwake prints when it sets the alarm should
+     be 10 minutes from now; if it is not, stop and look at the clock first.
   3. Check it:
         sudo /usr/sbin/rtcwake -m show
      Expect a line starting "alarm: on" with a time about 10 minutes from now.
@@ -124,12 +133,16 @@ Results so far
     power-on-after-AC-loss setting and no Wake on LAN setting.
     2026-11-04, Test 1 (AC): FAILED once. Alarm set 18:39:02 for 18:49:02,
     shown "on" twice, clean shutdown 18:42; still off at 18:54:47, when the
-    power button was pressed. Cause not known; not yet repeated.
+    power button was pressed. Lid open. Very likely cause: the RTC keeps local
+    time (dual boot) and the laptop had run since before the 1 November
+    daylight-saving change, so the RTC was an hour ahead. rtcwake printed the
+    wakeup as 19:49:04 when it was set, though "rtcwake -m show" said 18:49:04.
+    The shutdown corrected the RTC, so the alarm was really for 19:49, after
+    the button press. Since then the guard saves the time to the RTC before
+    setting its alarm, and Test 1 step 2 does the same. Retest pending.
     2026-11-04, Test 2 (battery, lid open): PASSED. Alarm due 19:19:53, booted
     19:20:15 (22 s late); both stops ended "Shutdown: done".
-    So the guard's alarm works on battery, the case it exists for. A machine
-    that wakes on battery but not on AC is the reverse of the usual pattern;
-    repeat Test 1 before concluding anything from one run.
+    So the guard's alarm works on battery, the case it exists for.
   Add your machine's result here, or send it to whoever gave you this file.
 
 

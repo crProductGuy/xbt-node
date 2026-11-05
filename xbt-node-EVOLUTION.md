@@ -374,3 +374,16 @@ sequences in syslog look alike, so the logs do not explain the AC failure. A wak
 AC is the reverse of the usual laptop pattern; the agent did not name a cause and proposed repeating Test 1
 with the lid open (D-040). The guard sets its alarm only on battery, so the case it exists for passed.
 Results recorded in the guide's results section.
+
+The owner then reported the lid was open in Test 1, and that rtcwake had printed the wakeup as 19:49:04 at
+set time while `rtcwake -m show` said 18:49:04. That hour pointed to the clock. The agent checked
+over SSH: the RTC keeps local time (the laptop dual-boots Windows), the time zone left daylight saving on
+1 November, and the laptop had run from 31 October to the test. Linux writes the RTC only at shutdown,
+so the RTC was an hour ahead; rtcwake counts from the RTC, so the alarm was really for 19:49. The
+shutdown corrected the RTC, which is why Test 2 then passed. The same flaw would hit the guard twice a
+year: an autumn alarm an hour late, a spring alarm in the past. Options put: save the system time to
+the RTC just before the alarm, or switch the RTC to UTC. The owner chose: "D-041 yes, on local time, not
+UTC". Built: the guard runs `hwclock --systohc` (which follows /etc/adjtime, so the RTC stays local)
+before rtcwake, and a failing or missing hwclock never blocks the alarm or the shutdown. Suite 123/123
+under dash; removing the hwclock call fails 3 tests. The guide's Test 1 now starts with the same
+hwclock line. Test 1 retest pending; the owner reinstalls the guard.

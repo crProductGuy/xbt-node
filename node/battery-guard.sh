@@ -22,6 +22,11 @@
 # two checks later, setting the next alarm. Below WAKE_FLOOR % it sets no alarm, so the
 # battery is never run flat by repeated boots; the power button is then the only way on.
 # A failed or missing rtcwake never stops the shutdown.
+# Just before setting the alarm it saves the system time into the RTC (hwclock --systohc),
+# which keeps the RTC in local time or UTC as /etc/adjtime says. rtcwake counts from the
+# RTC's time, and on Linux the RTC is otherwise written only at shutdown, so a local-time
+# RTC on a machine that stayed up across a daylight-saving change is an hour off: in the
+# autumn the alarm comes an hour late, in the spring it can land in the past and never fire.
 #
 # Settings: /etc/default/battery-guard may hold these lines (others are ignored):
 #   THRESHOLD=<5..50>        shut down at or below this %       (default 25)
@@ -33,6 +38,7 @@
 #   BG_CONFIG        (default /etc/default/battery-guard)
 #   BG_SHUTDOWN      (default "/sbin/shutdown -h now")
 #   BG_RTCWAKE       (default /usr/sbin/rtcwake)
+#   BG_HWCLOCK       (default /sbin/hwclock)
 #   BG_UPTIME        (default /proc/uptime; the guard does not act in the first 5 minutes)
 set -u
 
@@ -41,6 +47,7 @@ STATE=${BG_STATE_DIR:-/run/battery-guard}
 CONFIG=${BG_CONFIG:-/etc/default/battery-guard}
 SHUTDOWN=${BG_SHUTDOWN:-/sbin/shutdown -h now}
 RTCWAKE=${BG_RTCWAKE:-/usr/sbin/rtcwake}
+HWCLOCK=${BG_HWCLOCK:-/sbin/hwclock}
 UPTIME_FILE=${BG_UPTIME:-/proc/uptime}
 MIN_UPTIME=300
 
@@ -151,10 +158,14 @@ if [ "$WAKE_MINUTES" -eq 0 ]; then
     :
 elif [ "$BAT_CAP" -le "$WAKE_FLOOR" ]; then
     log "battery at ${BAT_CAP}%, at or below the wake floor ${WAKE_FLOOR}%: no wake alarm, it stays off until the power button"
-elif w=$("$RTCWAKE" -m no -s $((WAKE_MINUTES * 60)) </dev/null 2>&1); then
-    log "wake alarm set for ${WAKE_MINUTES} min from now"
 else
-    log "wake alarm FAILED ($w); shutting down anyway, it stays off until the power button"
+    h=$("$HWCLOCK" --systohc </dev/null 2>&1) ||
+        log "saving the time to the RTC FAILED ($h); setting the alarm anyway"
+    if w=$("$RTCWAKE" -m no -s $((WAKE_MINUTES * 60)) </dev/null 2>&1); then
+        log "wake alarm set for ${WAKE_MINUTES} min from now"
+    else
+        log "wake alarm FAILED ($w); shutting down anyway, it stays off until the power button"
+    fi
 fi
 log "on battery at ${BAT_CAP}% for two checks in a row; shutting down cleanly now"
 # shellcheck disable=SC2086  # SHUTDOWN is a command line and is split on purpose
