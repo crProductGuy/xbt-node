@@ -37,7 +37,8 @@ This drive is ext4 (one GPT partition, label knots-blocks). Windows cannot read 
   devuan-bitcoind.init     node: start at boot, clean stop            [Devuan only]
   devuan-datum-gateway.init  DATUM gateway: start at boot             [Devuan only]
   ubuntu-bitcoind.service  node as a systemd unit                     [Ubuntu, untested]
-  POWER-RECOVERY-AND-WAKE-TEST.txt  coming back on after an outage, and how to test it
+  docs/non-systemd/        the guide for Linux without systemd: install, battery guard,
+                           machine settings, clock, power recovery and wake test
 
   NOTE: Knots keeps blocks/index in the DATA DIRECTORY even when blocksdir is set
   (Bitcoin Core doc/files.md: "-blocksdir option does not affect this path"). An earlier
@@ -180,7 +181,7 @@ starts at boot. These two scripts do it:
   Test once that this machine wakes from off, on AC and on battery. Exact steps,
   and other ways to come back after an outage on other hardware (BIOS power-on
   after AC loss, Wake on LAN, UPS signalling, server management controllers):
-  POWER-RECOVERY-AND-WAKE-TEST.txt in this folder.
+  docs/non-systemd/power-recovery.md in the repository.
 
 
 ========================================================================

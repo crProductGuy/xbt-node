@@ -392,3 +392,20 @@ Retest of Test 1 the same evening, on AC with the lid open: alarm due 19:55:07, 
 owner: "self-start worked on AC! So it was the DST issue." The logs support that reading without proving
 it: the RTC had already been corrected by the earlier shutdown, and the failure was not reproduced on
 purpose. The HP 14 now passes both wake tests; the guard with the hwclock step awaits the owner's install.
+
+The owner then asked whether the files given to PyBLOCK were "a nice free-standing set of docs" they
+could load into their website. The agent said no: plain-text files, a setup guide written around this
+one laptop, two of them existing only on the stick, and the daylight-saving fix in one file only. It
+proposed a Markdown doc set in the repo (D-042); the owner: "D-042 yes". The owner has asked PyBLOCK
+whether their site wants HTML; Markdown converts easily if so. Built `docs/non-systemd/`: an index with
+a quick start and a tested-on table, then install, battery guard, machine settings, clock and time,
+power recovery (the wake-test guide, moved here from `node/` so there is one copy), troubleshooting and
+reference. Reading the old setup guide turned up a contradiction: it said to set AC power-on to "On, or
+Last State", while the power guide says Last State leaves a cleanly stopped machine off; the new pages
+say Power On. Mid-build the owner added: "add a list of the dev tools ... I install[ed] on Devuan so the
+DATUM gateway could be built from source ... a separate file ... to supplement the PATUM installation
+instructions". The agent took the list from the laptop's apt history rather than memory: nine packages
+installed on 17 October (curl, git, cmake, build-essential, pkgconf and four -dev libraries), now
+`build-tools.md` with a one-line check for what is missing. New tests: every relative link and anchor
+in the doc set resolves, and the reference page's checksums match the scripts; breaking a link, an
+anchor or a checksum each fails a test. Suite 126/126.

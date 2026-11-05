@@ -279,5 +279,27 @@ for f in "$HERE/seed/make-ext4-seed.sh" "$HERE"/node/*.sh "$HERE"/node/*.init "$
   check "syntax and LF endings: $(basename "$f")" "$(bash -n "$f" 2>&1; tr -cd '\r' < "$f" | wc -c)" 0
 done
 
+# docs/non-systemd: every relative link and #anchor resolves, and the checksums match the scripts
+DOCS="$HERE/docs/non-systemd"
+slugs() { grep -E '^#{1,6} ' "$1" | sed -E 's/^#+ //' | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9 -]//g; s/ /-/g'; }
+bad=""
+for md in "$DOCS"/*.md; do
+  while IFS= read -r link; do
+    file=${link%%#*}; anchor=""; [[ $link == *"#"* ]] && anchor=${link#*#}
+    target=$md; [[ -n $file ]] && target="$DOCS/$file"
+    if [[ ! -f $target ]]; then bad+=" $(basename "$md"):$link"; continue; fi
+    if [[ -n $anchor ]] && ! slugs "$target" | grep -qx -- "$anchor"; then bad+=" $(basename "$md"):$link"; fi
+  done < <(grep -oE '\]\([^)]+\)' "$md" | sed -E 's/^\]\(//; s/\)$//' | grep -vE '^[a-z]+:')
+done
+check "docs: every relative link and anchor resolves" "${bad:-none}" none
+check "docs: the doc set has its nine pages" "$(ls "$DOCS"/*.md | wc -l | tr -d ' ')" 9
+sums=""
+for f in devuan-bitcoind.init devuan-datum-gateway.init install-autostart.sh battery-guard.sh install-battery-guard.sh; do
+  want=$(grep -E "^[0-9a-f]{64}  $f\$" "$DOCS/reference.md" | cut -c1-64)
+  have=$(sha256sum "$HERE/node/$f" | cut -c1-64)
+  [[ -n $want && $want == "$have" ]] || sums+=" $f"
+done
+check "docs: reference.md checksums match the scripts" "${sums:-all match}" "all match"
+
 echo; echo "passed $PASS, failed $FAIL"
 [[ $FAIL -eq 0 ]]
