@@ -1,9 +1,9 @@
 # Install the init scripts
 
-PATUM sets up its node and DATUM gateway for systemd. On Devuan, or any
-Debian-family system that boots with sysvinit, nothing it sets up starts at
-boot. Two init scripts do that job, and stop both processes cleanly at
-shutdown.
+PATUM sets up its node, its DATUM gateway and its web panel for systemd. On
+Devuan, or any Debian-family system that boots with sysvinit, none of them
+starts at boot. Three init scripts do that job, and stop the node and gateway
+cleanly at shutdown.
 
 ## What the scripts do
 
@@ -15,6 +15,11 @@ shutdown.
   the gateway once the node answers RPC. It waits in the background, so the
   boot does not stall. It stops before the node at shutdown. If PATUM already
   started a gateway, it refuses to start a second one on port 23334.
+- **`/etc/init.d/patum-panel`** (from `devuan-patum-panel.init`) starts PATUM's
+  web panel once the gateway runs, on a fixed port (32999 unless you choose
+  another) bound to `127.0.0.1`. It is the Devuan stand-in for the always-on
+  panel service PATUM installs on systemd; see
+  [The PATUM panel](#the-patum-panel).
 
 ## Before you install
 
@@ -28,9 +33,6 @@ The scripts assume:
 - **The node has synced at least once:** the installer checks that
   `data/chainstate` exists.
 
-The PATUM panel is not started by any of these; see
-[Machine settings](machine-settings.md#the-patum-panel).
-
 ## Install
 
 Copy the scripts folder to the node machine. Then, from that folder, with
@@ -42,12 +44,13 @@ sudo sh install-autostart.sh YOURNAME
 
 The installer:
 
-1. copies the two init scripts to `/etc/init.d/`;
+1. copies the node and gateway init scripts to `/etc/init.d/`;
 2. writes their settings to `/etc/default/bitcoind` and
    `/etc/default/datum-gateway`;
 3. registers both with `update-rc.d`;
 4. prints which block-drive check it chose, the two services' status, and
-   the boot order.
+   the boot order;
+5. runs `install-panel-autostart.sh` for the panel.
 
 It starts and stops nothing. A node and gateway that are already running keep
 running, and the init scripts take over at the next boot. In the boot order
@@ -59,9 +62,47 @@ by hand, so the settings file matches.
 To undo:
 
 ```
+sudo update-rc.d patum-panel remove
 sudo update-rc.d datum-gateway remove
 sudo update-rc.d bitcoind remove
 ```
+
+## The PATUM panel
+
+On systemd, PATUM installs an always-on service for its web panel. On Devuan
+that service never runs, so without `/etc/init.d/patum-panel` the panel stays
+off after every reboot, and the browser cannot connect, until someone starts
+it by hand.
+
+The panel's init script:
+
+- waits in the background until `datum_gateway` runs (up to an hour, then it
+  starts anyway), so the panel does not open on a half-started node;
+- leaves alone a panel that is already running, for example one started by
+  hand, instead of starting a second one on the same port;
+- runs the panel as the node's user, with `-no-open -port 32999`;
+- at shutdown stops first and asks the panel to quit. It never force-kills
+  it, because the panel may be running an update.
+
+The panel starts no node or gateway of its own; the init scripts own those.
+
+Install it with the other two (the autostart installer runs it), or alone,
+for example to pick another port:
+
+```
+sudo sh install-panel-autostart.sh YOURNAME 32999
+```
+
+Open it at `http://127.0.0.1:32999/` on the node machine. It listens on
+`127.0.0.1` only, so from another machine open an SSH tunnel first, then the
+same address there:
+
+```
+ssh -L 32999:127.0.0.1:32999 YOURNAME@<node>
+```
+
+The panel's log is `/var/log/patum-panel.out`. Check or restart it with
+`sudo service patum-panel status` or `sudo service patum-panel restart`.
 
 ## The block-drive check
 

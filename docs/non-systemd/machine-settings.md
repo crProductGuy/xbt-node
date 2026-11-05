@@ -92,8 +92,10 @@ Skip this with the blocks on the internal disk.
 
 ## The PATUM panel
 
-On Devuan nothing starts the panel at boot. Start it by hand when needed,
-with a fixed port so its address stays the same from one start to the next:
+`/etc/init.d/patum-panel` starts the panel at boot on a fixed port, so its
+address stays the same from one start to the next; see
+[The PATUM panel](install.md#the-patum-panel). To start it by hand instead,
+for example at the desktop:
 
 ```
 ~/pyblock-node/bin/patum -port 32999

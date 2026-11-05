@@ -69,8 +69,10 @@ owner the result.
   gateway, or touches the seed drive is the owner's to run. Hand over one
   short command per line, about 60 characters at most, with no backslash
   continuations; the owner pastes them into a Linux terminal.
-- PATUM's panel is started by hand and never at boot. Its node and gateway
-  start buttons are not used; the init scripts own both processes.
+- PATUM's panel starts at boot from `/etc/init.d/patum-panel`, after the
+  gateway (the owner's decision, 2026-11-04; until then it was started by
+  hand). Its node and gateway start buttons are not used; the init scripts
+  own both processes.
 
 ## Done-when discipline
 

@@ -409,3 +409,19 @@ installed on 17 October (curl, git, cmake, build-essential, pkgconf and four -de
 `build-tools.md` with a one-line check for what is missing. New tests: every relative link and anchor
 in the doc set resolves, and the reference page's checksums match the scripts; breaking a link, an
 anchor or a checksum each fails a test. Suite 126/126.
+
+Later the same evening the owner asked to "start the PATUM service on port 32999. The browser can't
+connect. What are we missing on an auto-start? Please fix & document that". The panel was simply not
+running: the wake-test reboots had ended it, and on Devuan nothing started it again. On systemd PATUM
+installs an always-on panel service; here it never runs, and since 21 October the panel had been started
+by hand on purpose. The agent restarted it over SSH (detached, port 32999, the page answering locally,
+node and gateway on the same pids) and, at the owner's word, reversed the hand-start rule: a third init
+script, `devuan-patum-panel.init`, with its own installer, which `install-autostart.sh` now also runs.
+Design choices: the panel waits until `datum_gateway` runs (up to an hour) so it never opens on a
+half-started node; a panel already running is left alone, re-checked just before start; stop sends TERM
+and never force-kills, because the panel may be mid-update; `env HOME=` is set because PATUM finds its
+folders under the home. On the HP 14 the panel installer runs alone, so the live node's older init
+script is not replaced as a side effect. The doc set gained a panel section and a "browser cannot
+connect" entry. The owner also answered D-043: the systemctl-service-shim was his own experiment and is
+not needed, so the docs leave it out. Suite 138/138; one earlier run showed 4 wake-alarm checks failing
+once and not again in three reruns, not related to this change and noted as a possible flake.

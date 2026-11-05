@@ -33,9 +33,11 @@ This drive is ext4 (one GPT partition, label knots-blocks). Windows cannot read 
 
   README-LINUX-NODE.txt    this file
   seed-node.sh             the bring-up script                       [verified, Devuan]
-  install-autostart.sh     installs both start-at-boot scripts        [Devuan only]
+  install-autostart.sh     installs the three start-at-boot scripts   [Devuan only]
   devuan-bitcoind.init     node: start at boot, clean stop            [Devuan only]
   devuan-datum-gateway.init  DATUM gateway: start at boot             [Devuan only]
+  devuan-patum-panel.init  PATUM panel: start at boot, port 32999     [Devuan only]
+  install-panel-autostart.sh  installs the panel script alone         [Devuan only]
   ubuntu-bitcoind.service  node as a systemd unit                     [Ubuntu, untested]
   docs/non-systemd/        the guide for Linux without systemd: install, battery guard,
                            machine settings, clock, power recovery and wake test
@@ -156,8 +158,13 @@ starts at boot. These two scripts do it:
   this node, and that in debug.log the line before the newest start is "Shutdown: done".
   Also set the BIOS to power on when AC returns, or a power cut leaves it off.
 
-  The PATUM panel itself is not started at boot. Start it by hand when you need it:
-    ~/pyblock-node/bin/patum -port 32999      (add -no-open over SSH)
+  The PATUM panel starts at boot too, from /etc/init.d/patum-panel, once the gateway
+  runs (added 2026-11-04; before that a reboot left it off). On this machine, whose
+  node init predates that, install it alone:
+    sudo sh ~/init/install-panel-autostart.sh YOURNAME
+  Open http://127.0.0.1:32999/ there, or from another machine through
+    ssh -L 32999:127.0.0.1:32999 YOURNAME@<node>
+  By hand instead:  ~/pyblock-node/bin/patum -port 32999   (add -no-open over SSH)
 
   Battery guard (laptop nodes). The desktop's low-battery action only works while
   someone is logged in, and its default is often suspend, which ends in a crash

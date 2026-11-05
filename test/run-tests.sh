@@ -279,6 +279,34 @@ for f in "$HERE/seed/make-ext4-seed.sh" "$HERE"/node/*.sh "$HERE"/node/*.init "$
   check "syntax and LF endings: $(basename "$f")" "$(bash -n "$f" 2>&1; tr -cd '\r' < "$f" | wc -c)" 0
 done
 
+# devuan-patum-panel.init and install-panel-autostart.sh, with start-stop-daemon and pgrep stubbed
+PN="$WORK/panel"; mkdir -p "$PN/bin"
+printf '#!/bin/sh\nprintf "%%s\\n" "$@" > "%s/ssd-args"\n' "$PN" > "$PN/bin/start-stop-daemon"
+printf '#!/bin/sh\n[ -e "%s/other" ]\n' "$PN" > "$PN/bin/pgrep"
+chmod +x "$PN/bin/start-stop-daemon" "$PN/bin/pgrep"
+PI="$HERE/node/devuan-patum-panel.init"
+pstart() { rm -f "$PN/ssd-args"; PATH="$PN/bin:$PATH" "$GSH" -c "
+  log_success_msg() { echo \"ok: \$*\"; }; log_failure_msg() { echo \"fail: \$*\"; }
+  log_daemon_msg() { :; }; log_end_msg() { :; }
+  PANEL_USER=nodeuser PANEL_PORT=32999 GW_WAIT=3600 PIDFILE='$PN/none.pid' OUTFILE=/dev/null
+  home=/home/nodeuser NODE_DIR=/home/nodeuser/pyblock-node PATUM=/home/nodeuser/pyblock-node/bin/patum
+  $(sed -n '/^is_running()/,/^}/p; /^other_panel()/,/^}/p; /^do_start()/,/^}/p' "$PI")
+  do_start"; }
+rm -f "$PN/other"; out=$(pstart)
+args=$(tr '\n' ' ' < "$PN/ssd-args" 2>/dev/null)
+check "panel: start runs the panel as its user" "$([[ $args == *"--chuid nodeuser"* ]] && echo yes)" yes
+check "  on the fixed port, without opening a browser" "$([[ $args == *"-no-open -port 32999"* ]] && echo yes)" yes
+check "  after waiting for datum_gateway" "$([[ $args == *"-x datum_gateway"*"exec env HOME="* ]] && echo yes)" yes
+check "  and not if a panel started meanwhile" "$([[ $args == *"-x patum >/dev/null && exit 0; exec"* ]] && echo yes)" yes
+touch "$PN/other"; out=$(pstart)
+check "panel: a running panel is left alone, no second start" "$(test -e "$PN/ssd-args"; echo $?) $(grep -c 'already running' <<<"$out")" "1 1"
+check "panel: stop never force-kills" "$(grep -c 'KILL' <(sed -n '/^do_stop()/,/^}/p' "$PI"))" 0
+check "panel: starts after the gateway, stops before it" "$(grep -cE '^# Required-(Start|Stop):.* datum-gateway$' "$PI")" 2
+vp() { "$GSH" -c "$(sed -n '/^valid_port()/,/^}/p' "$HERE/node/install-panel-autostart.sh"); valid_port '$1' && echo ok || echo no"; }
+check "panel installer: port 32999 is accepted" "$(vp 32999)" ok
+check "panel installer: ports below 1024, above 65535, or not numbers are refused" "$(vp 80) $(vp 70000) $(vp 3x) $(vp '')" "no no no no"
+check "autostart installer runs the panel installer" "$(grep -c 'install-panel-autostart.sh" "$U"' "$HERE/node/install-autostart.sh")" 1
+
 # docs/non-systemd: every relative link and #anchor resolves, and the checksums match the scripts
 DOCS="$HERE/docs/non-systemd"
 slugs() { grep -E '^#{1,6} ' "$1" | sed -E 's/^#+ //' | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9 -]//g; s/ /-/g'; }
@@ -294,7 +322,7 @@ done
 check "docs: every relative link and anchor resolves" "${bad:-none}" none
 check "docs: the doc set has its nine pages" "$(ls "$DOCS"/*.md | wc -l | tr -d ' ')" 9
 sums=""
-for f in devuan-bitcoind.init devuan-datum-gateway.init install-autostart.sh battery-guard.sh install-battery-guard.sh; do
+for f in devuan-bitcoind.init devuan-datum-gateway.init devuan-patum-panel.init install-autostart.sh install-panel-autostart.sh battery-guard.sh install-battery-guard.sh; do
   want=$(grep -E "^[0-9a-f]{64}  $f\$" "$DOCS/reference.md" | cut -c1-64)
   have=$(sha256sum "$HERE/node/$f" | cut -c1-64)
   [[ -n $want && $want == "$have" ]] || sums+=" $f"

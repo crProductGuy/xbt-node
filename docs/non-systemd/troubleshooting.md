@@ -18,6 +18,17 @@ the node. Then `sudo service datum-gateway status`. If PATUM's panel already
 started a gateway, the init script refuses to start a second one on port
 23334; stop the panel's copy and start the service.
 
+## The browser cannot connect to the PATUM panel
+
+1. Is it running? `sudo service patum-panel status`, or `pgrep -a patum`.
+   Without `/etc/init.d/patum-panel` nothing starts it after a reboot; see
+   [The PATUM panel](install.md#the-patum-panel).
+2. Just after a boot it waits for the gateway, which waits for the node's
+   RPC; give it a few minutes.
+3. It listens on `127.0.0.1` only. From another machine, open the SSH tunnel
+   first and use `http://127.0.0.1:32999/` on that machine.
+4. Read `/var/log/patum-panel.out` for the panel's own messages.
+
 ## The machine did not switch itself back on
 
 Run the tests in [Power recovery](power-recovery.md), in order. The usual

@@ -1,0 +1,91 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          patum-panel
+# Required-Start:    $local_fs $remote_fs $network datum-gateway
+# Required-Stop:     $local_fs $remote_fs $network datum-gateway
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: PATUM web panel on a fixed local port
+# Description:       Starts PATUM's control panel once the DATUM gateway runs, on a fixed
+#                    port bound to 127.0.0.1. Stops first at shutdown.
+### END INIT INFO
+#
+# devuan-patum-panel.init: DEVUAN (sysvinit) ONLY. On systemd, PATUM installs an always-on
+# panel service; on Devuan that service never runs, so after a reboot the panel stays off
+# until someone starts it. This script is that service.
+#
+# Installed by install-panel-autostart.sh (which install-autostart.sh also runs).
+# Settings in /etc/default/patum-panel: PANEL_USER (required), PANEL_PORT (default 32999).
+#
+# The panel starts no node or gateway of its own; the init scripts own those. It waits in
+# the background until datum_gateway runs (up to GW_WAIT seconds, then starts anyway), so
+# boot does not stall and the panel does not open on a half-started node.
+# A panel already running for PANEL_USER (for example one started by hand) is left alone.
+# Stop asks the panel to quit (TERM) and waits 30 s; it never force-kills it, because the
+# panel may be running an update.
+
+NAME=patum-panel
+PANEL_USER=
+PANEL_PORT=32999
+GW_WAIT=3600
+PIDFILE=/run/$NAME.pid
+OUTFILE=/var/log/$NAME.out
+
+[ -r /etc/default/$NAME ] && . /etc/default/$NAME
+[ -r /lib/lsb/init-functions ] && . /lib/lsb/init-functions
+
+check_config() {
+    if [ -z "$PANEL_USER" ] || ! getent passwd "$PANEL_USER" >/dev/null; then
+        log_failure_msg "$NAME: PANEL_USER is not set to an existing user in /etc/default/$NAME"; exit 6
+    fi
+    case $PANEL_PORT in ''|*[!0-9]*) log_failure_msg "$NAME: PANEL_PORT must be a number"; exit 6 ;; esac
+    home=$(getent passwd "$PANEL_USER" | cut -d: -f6)
+    NODE_DIR="$home/pyblock-node"
+    PATUM="$NODE_DIR/bin/patum"
+    [ -x "$PATUM" ] || { log_failure_msg "$NAME: $PATUM is missing or not executable"; exit 5; }
+}
+
+is_running() {
+    [ -r "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+# A panel started by hand has no pid file here; a second one would fight it for the port.
+other_panel() {
+    pgrep -u "$PANEL_USER" -x patum >/dev/null 2>&1
+}
+
+do_start() {
+    if is_running; then log_success_msg "$NAME is already running"; return 0; fi
+    if other_panel; then log_success_msg "$NAME: a PATUM panel is already running; not starting a second one"; return 0; fi
+    log_daemon_msg "Starting PATUM panel on 127.0.0.1:$PANEL_PORT (waits for the gateway in the background)" "$NAME"
+    # exec keeps the same pid, so the pid file then names the panel itself. env sets HOME,
+    # because PATUM finds its folders under the user's home.
+    start-stop-daemon --start --quiet --background --make-pidfile --pidfile "$PIDFILE" \
+        --chuid "$PANEL_USER" --chdir "$NODE_DIR" --output "$OUTFILE" --startas /bin/sh -- -c \
+        "i=0; while [ \$i -lt $GW_WAIT ] && ! pgrep -u '$PANEL_USER' -x datum_gateway >/dev/null; do sleep 5; i=\$((i+5)); done; pgrep -u '$PANEL_USER' -x patum >/dev/null && exit 0; exec env HOME='$home' USER='$PANEL_USER' '$PATUM' -no-open -port $PANEL_PORT"
+    rc=$?
+    log_end_msg $rc
+    return $rc
+}
+
+do_stop() {
+    if ! is_running; then log_success_msg "$NAME is not running (from this script)"; rm -f "$PIDFILE"; return 0; fi
+    log_daemon_msg "Stopping PATUM panel" "$NAME"
+    start-stop-daemon --stop --quiet --retry TERM/30 --pidfile "$PIDFILE"
+    rc=$?
+    [ $rc -eq 0 ] && rm -f "$PIDFILE"
+    log_end_msg $rc
+    return $rc
+}
+
+case "$1" in
+    start)   check_config; do_start ;;
+    stop)    check_config; do_stop ;;
+    restart|force-reload) check_config; do_stop; do_start ;;
+    status)
+        check_config
+        if is_running; then log_success_msg "$NAME is running (pid $(cat "$PIDFILE")), http://127.0.0.1:$PANEL_PORT/"; exit 0
+        elif other_panel; then log_success_msg "$NAME: a PATUM panel started outside this script is running"; exit 0
+        else log_failure_msg "$NAME is not running"; exit 3; fi ;;
+    *) echo "Usage: service $NAME {start|stop|restart|status}" >&2; exit 3 ;;
+esac

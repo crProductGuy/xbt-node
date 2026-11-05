@@ -14,7 +14,7 @@
 #
 # Installs devuan-bitcoind.init as /etc/init.d/bitcoind and devuan-datum-gateway.init as
 # /etc/init.d/datum-gateway (both from this script's folder), writes their settings to
-# /etc/default/, and registers them. It does NOT start or stop anything now: the node and
+# /etc/default/, and registers them. Then runs install-panel-autostart.sh for the PATUM panel. It does NOT start or stop anything now: the node and
 # gateway that are already running keep running, and the scripts take over at next boot.
 # Safe to run again. Undo:  update-rc.d datum-gateway remove; update-rc.d bitcoind remove
 set -eu
@@ -73,3 +73,7 @@ service datum-gateway status || true
 echo
 echo "boot order (S = start, K = stop):"
 ls /etc/rc2.d /etc/rc0.d | grep -E 'bitcoind|datum' || true
+
+# The PATUM panel, last: it starts after the gateway, on port 32999.
+echo
+sh "$HERE/install-panel-autostart.sh" "$U" || echo "panel autostart NOT installed (see above); the node and gateway are."
