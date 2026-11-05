@@ -387,3 +387,8 @@ UTC". Built: the guard runs `hwclock --systohc` (which follows /etc/adjtime, so 
 before rtcwake, and a failing or missing hwclock never blocks the alarm or the shutdown. Suite 123/123
 under dash; removing the hwclock call fails 3 tests. The guide's Test 1 now starts with the same
 hwclock line. Test 1 retest pending; the owner reinstalls the guard.
+
+Retest of Test 1 the same evening, on AC with the lid open: alarm due 19:55:07, booted 19:55:28. The
+owner: "self-start worked on AC! So it was the DST issue." The logs support that reading without proving
+it: the RTC had already been corrected by the earlier shutdown, and the failure was not reproduced on
+purpose. The HP 14 now passes both wake tests; the guard with the hwclock step awaits the owner's install.

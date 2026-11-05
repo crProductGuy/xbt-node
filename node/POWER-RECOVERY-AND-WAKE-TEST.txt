@@ -139,7 +139,9 @@ Results so far
     wakeup as 19:49:04 when it was set, though "rtcwake -m show" said 18:49:04.
     The shutdown corrected the RTC, so the alarm was really for 19:49, after
     the button press. Since then the guard saves the time to the RTC before
-    setting its alarm, and Test 1 step 2 does the same. Retest pending.
+    setting its alarm, and Test 1 step 2 does the same.
+    2026-11-04, Test 1 retest (AC, lid open, RTC already correct): PASSED.
+    Alarm due 19:55:07, booted 19:55:28 (21 s late).
     2026-11-04, Test 2 (battery, lid open): PASSED. Alarm due 19:19:53, booted
     19:20:15 (22 s late); both stops ended "Shutdown: done".
     So the guard's alarm works on battery, the case it exists for.
