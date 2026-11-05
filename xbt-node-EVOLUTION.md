@@ -425,3 +425,8 @@ script is not replaced as a side effect. The doc set gained a panel section and 
 connect" entry. The owner also answered D-043: the systemctl-service-shim was his own experiment and is
 not needed, so the docs leave it out. Suite 138/138; one earlier run showed 4 wake-alarm checks failing
 once and not again in three reruns, not related to this change and noted as a possible flake.
+
+The owner installed the panel's init script and removed the systemctl shim. Checked over SSH: boot order
+starts the node, gateway, panel in that order and stops them in reverse; the panel runs from the init
+script's pid file on 127.0.0.1:32999 and answers; the node and gateway kept their pids. A real reboot is
+still to come.
