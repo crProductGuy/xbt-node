@@ -442,3 +442,5 @@ is now "Auto-start at boot", with a table of what PATUM uses on systemd and what
 intermittent suite failures this evening (wake checks once, the PowerShell manifest checks once) matched
 the PC's commit charge at 89 % with a 9.6 GB kernel pool, the known leak, not the code; reruns passed.
 Suite 142/142.
+
+- 2026-11-07, session E (79d5edad): the owner rebooted the laptop cleanly after running the autostart installer, and the node, gateway and panel all came back by themselves, which is the first real boot test of the panel service. The gateway log warns at every start that its configured 4096 stratum clients exceed the 1024 open-file soft limit. The rotated logs show it at every start since 17 October; with 3 miners the gateway holds 21 files open. Judged harmless at this scale; the owner chose to leave it (D-045 a).
