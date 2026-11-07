@@ -8,6 +8,21 @@ It also shows how a pre-owned or new low-end laptop with 8GB RAM and a small int
 
 This approach can save hundreds of dollars vs. buying a new mini-PC with a 2TB SSD and a Windows license, or loading StartOS or Umbrel home server software. 
 
+
+## Who it is for
+
+- **Anyone running PATUM on Devuan or another Linux without systemd.** PATUM
+  ships systemd units only, so on these systems nothing starts the panel,
+  stops the node cleanly or runs the daily update check. Start at
+  [docs/non-systemd/README.md](docs/non-systemd/README.md): nine short guides
+  and seven scripts, also sent to the PyBLOCK team as a zip in November 2026.
+- **Anyone seeding a new node from an existing one** instead of a
+  weeks-long download: see `seed/` and the runbook,
+  [node/README-LINUX-NODE.txt](node/README-LINUX-NODE.txt).
+- **Anyone curious how it was built with a coding agent:** the full story,
+  with the decisions and the mistakes, is in
+  [xbt-node-EVOLUTION.md](xbt-node-EVOLUTION.md).
+
 # Details:
 
 This repo answers "Yes" to: can a spare laptop on a lightweight Linux distribution run its own XBT node (Bitcoin Knots with Blake2b-sc PoW algorithm) and a DATUM Gateway? 
@@ -53,20 +68,6 @@ battery runs flat. It enables a home mining setup that builds its own block
 templates. Example: after a power-off, the node, gateway and panel come back
 before anyone logs in, and the miners return to them on their own within about
 ten minutes.
-
-## Who it is for
-
-- **Anyone running PATUM on Devuan or another Linux without systemd.** PATUM
-  ships systemd units only, so on these systems nothing starts the panel,
-  stops the node cleanly or runs the daily update check. Start at
-  [docs/non-systemd/README.md](docs/non-systemd/README.md): nine short guides
-  and seven scripts, also sent to the PyBLOCK team as a zip in November 2026.
-- **Anyone seeding a new node from an existing one** instead of a
-  weeks-long download: see `seed/` and the runbook,
-  [node/README-LINUX-NODE.txt](node/README-LINUX-NODE.txt).
-- **Anyone curious how it was built with a coding agent:** the full story,
-  with the decisions and the mistakes, is in
-  [xbt-node-EVOLUTION.md](xbt-node-EVOLUTION.md).
 
 ## The chain
 
