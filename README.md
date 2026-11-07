@@ -3,7 +3,8 @@
 Can a spare laptop run its own XBT node, so the miners stop depending on
 someone else's? This repo holds the scripts and guides that did it. A Devuan
 laptop's node was seeded from a Windows PC's already-synced copy of the chain
-(about 880 GB moved over a USB drive and checked file by file with SHA-256).
+(about 870 GB of block files, plus the chainstate and block index, moved over
+a USB drive and checked file by file with SHA-256).
 Init scripts keep the node, its DATUM gateway and the PATUM panel running
 across reboots, and a battery guard shuts the laptop down cleanly before its
 battery runs flat. It enables a home mining setup that builds its own block

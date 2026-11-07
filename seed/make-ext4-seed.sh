@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # make-ext4-seed.sh: reformat the WD My Passport as ext4 and fill it from the Windows
-# disk. Run from an Ubuntu LIVE USB session on the PC (Ryzen2), with Windows shut down.
+# disk. Run from an Ubuntu LIVE USB session on the Windows PC, with Windows shut down.
 #
 # It reads the Windows disk (mounted read-only) and writes only to the Passport:
 #   <drive>/blocks/        all block files, blocks/index/ and xor.dat

@@ -1,9 +1,10 @@
 README-LINUX-NODE.txt
 Bring up an XBT node (Bitcoin Knots, Blake2b fork, rdts rules) on Linux from this drive
-Written 2026-10-04 on the Windows PC (Ryzen2), revised 2026-10-11 for ext4, and rewritten
+Written 2026-10-04 on the Windows PC, revised 2026-10-11 for ext4, and rewritten
 2026-10-17 after the bring-up on the HP 14 actually ran.
 
-STATUS (2026-10-17): DONE AND RUNNING on the HP 14 (Devuan 6, sysvinit) under PATUM 0.5.3.
+STATUS (2026-11-07): RUNNING on the HP 14 (Devuan 6, sysvinit) since 2026-10-17, now under
+PATUM 0.5.9 with Bitcoin Knots 29.4.3 (brought up under PATUM 0.5.3 and Knots 29.4.2).
 Everything below marked "verified" was run there. The Ubuntu files are untested.
 
 The chain: XBT = Bitcoin with Blake2b proof of work, a strict spam-hostile chain with
@@ -15,8 +16,9 @@ This drive is ext4 (one GPT partition, label knots-blocks). Windows cannot read 
 1. WHAT IS ON THIS DRIVE
 ========================================================================
 
-  blocks/                  868 GB of block files (blk*.dat, rev*.dat, xor.dat). The node
-                           reads and writes these here, through  blocksdir=/mnt/passport.
+  blocks/                  868 GB of block files at seeding (808 GiB, as Linux tools show
+                           it): blk*.dat, rev*.dat, xor.dat. The node reads and writes
+                           these here, through  blocksdir=/mnt/passport, so they grow.
   blocks/index/            the snapshot's block index. A COPY goes to the data directory
                            on the SSD; Knots never uses this one (see the note below).
   chainstate/              11.5 GB snapshot of the UTXO database. A COPY goes to the SSD.
@@ -62,8 +64,10 @@ The snapshot:
 ========================================================================
 
   PATUM folder     ~/pyblock-node/
-    program        pyblock-datum-installer-linux-amd64   (current; older ones kept as -0.5.x)
-    node           bin/bitcoind, bin/bitcoin-cli          (Knots v29.4.2.knots20260508)
+    program        bin/patum since 0.5.7 (PATUM updates it in place); at bring-up it was
+                   pyblock-datum-installer-linux-amd64, now a stale 0.5.3 copy: do not run it
+    node           bin/bitcoind, bin/bitcoin-cli          (Knots 29.4.2 at bring-up, 29.4.3
+                                                            since 2026-10-28)
     data dir       data/   (bitcoin.conf, chainstate/, blocks/index/, indexes/txindex)
   gateway          ~/pyblock-gateway/datum_gateway -c wavicles.json   (log wavicles.log)
   drive            /mnt/passport, from /etc/fstab by UUID, options noatime,nofail
@@ -129,18 +133,20 @@ Do everything as the normal user who will own the node, not as root.
 
 
 ========================================================================
-4. START AT BOOT  [DEVUAN]   files: install-autostart.sh and the two .init files
+4. START AT BOOT  [DEVUAN]   files: the two installers and the three .init files
 ========================================================================
 
 PATUM's own start-at-boot files are systemd units, so on Devuan nothing it sets up
-starts at boot. These two scripts do it:
+starts at boot. Three init scripts do it:
 
   bitcoind        waits up to 90 s for the drive, never starts without it, stops the
                   node with TERM and waits up to 15 min for a clean exit (never kills)
   datum-gateway   starts after bitcoind, waits in the background (up to 1 h) until the
                   node answers RPC, then runs the gateway; stops BEFORE the node
+  patum-panel     starts the panel once the gateway runs (see below)
 
-  Install (copy the three files to ~/init first):
+  Install (copy install-autostart.sh, install-panel-autostart.sh and the three
+  .init files to ~/init first):
     sudo sh ~/init/install-autostart.sh YOURNAME
   It changes nothing that is running; the scripts take over at the next boot.
   The drive check is chosen by the installer and written as MNT= in
@@ -156,7 +162,9 @@ starts at boot. These two scripts do it:
 
   Test it once: sudo reboot, then check both services, that the miners are back on
   this node, and that in debug.log the line before the newest start is "Shutdown: done".
-  Also set the BIOS to power on when AC returns, or a power cut leaves it off.
+  If the BIOS has a "power on when AC returns" setting, set it to Power On, or a
+  power cut leaves the machine off. The HP 14's BIOS has none; see "Coming back
+  after an outage" below for what it does instead.
 
   The PATUM panel starts at boot too, from /etc/init.d/patum-panel, once the gateway
   runs (added 2026-11-04; before that a reboot left it off). On this machine, whose
