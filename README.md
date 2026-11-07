@@ -3,7 +3,9 @@
 Why does this repo exist? 
 
 It enables an XBT Bitcoin node-runner and miner, who wants to run the PATUM combined Bitcoin Knots node and DATUM gateway software from Pyblock.xyx, on Devuan Linux from devuan.org, or other lightweight Linux distros that use sysvinit instead of systemd for boot-up process initialization.
+
 It also shows how a pre-owned or new low-end laptop with 8GB RAM and a small internal SSD, plus an external USB HDD, can cost-effectively run a lightweight Linux OS, Bitcoin Knots node and DATUM gateway software, AND provide battery backup to maximize up-time in case of power interruptions.
+
 This approach can save hundreds of dollars vs. buying a new mini-PC with a 2TB SSD and a Windows license, or loading StartOS or Umbrel home server software. 
 
 # Details:
