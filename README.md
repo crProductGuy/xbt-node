@@ -1,18 +1,48 @@
 # xbt-node
 
-Can a spare laptop run its own XBT node (Bitcoin Knots with Blake2b-sc PoW algorithm) and a DATUM Gateway, so the owner's ASIC hashing machines stop depending on
-someone else's node, and the owner's node can create their own block templates?
+Why does this repo exist? 
 
-This goal is considered "full mining", as opposed to "hashing", the easy path = pointing ASIC hashers toward a Stratum V1 mining Pool node.
+It enables an XBT Bitcoin node-runner and miner, who wants to run the PATUM combined Bitcoin Knots node and DATUM gateway software from Pyblock.xyx, on Devuan Linux from devuan.org, or other lightweight Linux distros that use sysvinit instead of systemd for boot-up process initialization.
+It also shows how a pre-owned or new low-end laptop with 8GB RAM and a small internal SSD, plus an external USB HDD, can cost-effectively run a lightweight Linux OS, Bitcoin Knots node and DATUM gateway software, AND provide battery backup to maximize up-time in case of power interruptions.
+This approach can save hundreds of dollars vs. buying a new mini-PC with a 2TB SSD and a Windows license, or loading StartOS or Umbrel home server software. 
 
-This repo holds the scripts and guides that did enable full XBT mining on a Devuan Linux-based laptop that does NOT support "systemd" init code, such as found in Ubuntu and other commodity Linux distros.
+# Details:
 
-Why does systemd matter, and why would someone want to run Devuan (a lighter implementation of Debian from devuan.org) instead of a more typical Linux like Ubuntu or System76?
- - Devuan can run on smaller machines, with a lightweight Xfce desktop and `sysvinit` instead of `systemd`. 
- - Many node-runners prefer lightness and simplicity to minimize cost, security risk, and don't wish to disclose private information
- - Debian, Ubunty, and many other Linux vendors support user age verification, in part via systemd.
+This repo answers "Yes" to: can a spare laptop on a lightweight Linux distribution run its own XBT node (Bitcoin Knots with Blake2b-sc PoW algorithm) and a DATUM Gateway? 
+
+A Bitcoin Knots node client, plus a DATUM gateway, enables decentralized Bitcoin mining, where each node runner determines what transactions they will accept into blocks they mine from their ASIC hashing machines, via individual block templates they create. The node software also controls which transactions will be forwarded (relay policy) to other nodes across the XBT Bitcoin network.
+
+This is the opposite of centralized pool mining, with potentially hundreds of hashing machines and a single pool-managed node & block template controlling what transactions can be mined or excluded across all of those ASIC machines, and relayed to other centralized miners.
+
+Can such a laptop auto-start node and gateway processes, and shut them down safely when power drops and the battery is low?  Yes!
+
+## What's in the repo, what does it do:
+
+It holds the scripts and guides that enable XBT node and DATUM gateway automatic boot-time process startup and management on a Devuan Linux-based laptop or desktop that does not support "systemd" boot-time `init` code. 
+It also manages safe shutdown of the Knots node and gateway, including auto-shutdown when laptop battery power drops below a threshold, and auto-checking hourly whether AC and battery power is adequate to restart the node and gateway processes. 
+This facilitates maximum DATUM-based mining uptime on the owner's node, and minimizes ASIC miner fallback time to Stratum V1 hashing directly to a mining pool. 
+
+Background on Linux Init software: systemd is used in Ubuntu, Debian, Fedora, and other commodity Linux distros, and was introduced around 2010. Devuan linux uses uses the older and simpler sysvinit from System V Unix, which manages processes by sequential scripts.
+
+Why would someone want to run Devuan (a lighter implementation of Debian from devuan.org) instead of a more typical Linux like Ubuntu or System76? 
+ - smaller and cheaper machine, even used, especially with rising PC component prices
+ - lighter Xfce desktop UI for adequate management without bloat
+ - reduced security and privacy risk
+ - tighter admin control of processes, etc.
+ - See https://linuxvox.com/blog/devuan-linux/
+   
+Why does systemd vs. sysvinit matter for a node-running machine?
+
+Some XBT node packages, like PyBLOCK's PATUM from https://b.pyblock.xyz:8443/patum.php, that deliver Bitoin node and DATUM gateway software, assume the presence of `systemd` to manage startup and background processes, such as Knots bitcoind and datum_gateway.
+
+Running PATUM or other node software on on Linux distros without systemd require extra config steps that may not be familiar to many users.  This repo exists to fill that gap.
+
+It also show how Bitcoin block and chainstate data files can be migrated from an existing Knots node on Windows to a new Linux-based node, without a full Initial Block Download (IBD) which can take days
+
+Finally, it shows how to (optionally) run BItcoin Knots on a full (unpruned) node, with a small low-cost internal SSD, and a 1-2 TB external USB hard disk drive for block storage.
+A $150 external 2.5" HDD for block storage (blocksdir) plus a $60 internal 256GB NVME2 can save $200 vs. purchasing an internal SSD large enough to hold chainstate, index, and full blocksdir.
  
-The setup process:
+# The setup process:
 A Devuan Linux laptop's node was seeded from a Windows PC's already-synced copy of the XBT bitcoin chain (about 870 GB of block files, plus the chainstate and block index, moved over
 a USB drive and checked file by file with SHA-256).
 Init scripts keep the node, its DATUM gateway and the PATUM panel running
