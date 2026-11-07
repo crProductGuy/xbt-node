@@ -82,4 +82,4 @@ Bitcoin Knots 29.4.3 and the DATUM gateway, with three miners pointed at it.
 
 ## License
 
-No license yet: all rights reserved by the owner until one is added.
+MIT, for the whole repository. See [LICENSE](LICENSE).
