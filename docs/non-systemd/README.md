@@ -56,7 +56,8 @@ One machine, set up between October and November 2026:
 - HP Laptop 14-fq0xxx, AMI BIOS F.52, dual boot with Windows;
 - Devuan 6 with sysvinit, Xfce on slim, elogind and upowerd;
 - PATUM 0.5.9, Bitcoin Knots 29.4.3 with `consensusrules=rdts`, and the DATUM
-  gateway on WAVICLES, with three miners pointed at it;
+  gateway on WAVICLES (the DATUM pool PATUM sets up), with three miners
+  pointed at it;
 - block files on an external USB drive.
 
 | Part | Status |
