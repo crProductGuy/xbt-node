@@ -55,14 +55,14 @@ One machine, set up between October and November 2026:
 
 - HP Laptop 14-fq0xxx, AMI BIOS F.52, dual boot with Windows;
 - Devuan 6 with sysvinit, Xfce on slim, elogind and upowerd;
-- PATUM 0.5.7 (0.5.9 by 4 November), Bitcoin Knots 29.4.3 with `consensusrules=rdts`, and the DATUM
-  gateway on WAVICLES, with two miners pointed at it;
+- PATUM 0.5.9, Bitcoin Knots 29.4.3 with `consensusrules=rdts`, and the DATUM
+  gateway on WAVICLES, with three miners pointed at it;
 - block files on an external USB drive.
 
 | Part | Status |
 |---|---|
 | Init scripts | In use since 21 October 2026, through several reboots. Every stop in the node's log ends `Shutdown: done` within seconds. |
-| Panel at boot | Added 4 November 2026, after a reboot left the panel off. Automated tests under `dash`. Installed on that machine the same day and started by `service patum-panel start`; not yet seen starting at a real boot. |
+| Panel at boot | Added 4 November 2026, after a reboot left the panel off. Automated tests under `dash`. Installed on that machine the same day. Started by itself after a clean shutdown and a power-button start, 7 November 2026. |
 | Optional block-drive check | Automated tests under `dash`. Not yet installed on that machine, which runs the earlier init script with a fixed drive check. |
 | Battery guard | In use since 31 October 2026. Automated tests under `dash`, and a simulated low-battery run by the PyBLOCK team. Not yet seen shutting down on a real drained battery. |
 | Wake alarm | Woke the machine from off on AC and on battery, 4 November 2026. See [Results so far](power-recovery.md#results-so-far). |
