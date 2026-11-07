@@ -1,9 +1,19 @@
 # xbt-node
 
-Can a spare laptop run its own XBT node, so the miners stop depending on
-someone else's? This repo holds the scripts and guides that did it. A Devuan
-laptop's node was seeded from a Windows PC's already-synced copy of the chain
-(about 870 GB of block files, plus the chainstate and block index, moved over
+Can a spare laptop run its own XBT node (Bitcoin Knots with Blake2b-sc PoW algorithm) and a DATUM Gateway, so the owner's ASIC hashing machines stop depending on
+someone else's node, and the owner's node can create their own block templates?
+
+This goal is considered "full mining", as opposed to "hashing", the easy path = pointing ASIC hashers toward a Stratum V1 mining Pool node.
+
+This repo holds the scripts and guides that did enable full XBT mining on a Devuan Linux-based laptop that does NOT support "systemd" init code, such as found in Ubuntu and other commodity Linux distros.
+
+Why does systemd matter, and why would someone want to run Devuan (a lighter implementation of Debian from devuan.org) instead of a more typical Linux like Ubuntu or System76?
+ - Devuan can run on smaller machines, with a lightweight Xfce desktop and `sysvinit` instead of `systemd`. 
+ - Many node-runners prefer lightness and simplicity to minimize cost, security risk, and don't wish to disclose private information
+ - Debian, Ubunty, and many other Linux vendors support user age verification, in part via systemd.
+ 
+The setup process:
+A Devuan Linux laptop's node was seeded from a Windows PC's already-synced copy of the XBT bitcoin chain (about 870 GB of block files, plus the chainstate and block index, moved over
 a USB drive and checked file by file with SHA-256).
 Init scripts keep the node, its DATUM gateway and the PATUM panel running
 across reboots, and a battery guard shuts the laptop down cleanly before its
