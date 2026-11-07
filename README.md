@@ -41,7 +41,7 @@ This facilitates maximum DATUM-based mining uptime on the owner's node, and mini
 
 Background on Linux Init software: systemd is used in Ubuntu, Debian, Fedora, and other commodity Linux distros, and was introduced around 2010. Devuan linux uses the older and simpler sysvinit from System V Unix, which manages processes by sequential scripts.
 
-Why would someone want to run Devuan (a lighter implementation of Debian from devuan.org) instead of a more typical Linux like Ubuntu or System76? 
+Why would someone want to run Devuan (a lighter implementation of Debian from devuan.org) instead of a more typical Linux like Ubuntu or Pop!_OS? 
  - smaller and cheaper machine, even used, especially with rising PC component prices
  - lighter Xfce desktop UI for adequate management without bloat
  - reduced security and privacy risk
