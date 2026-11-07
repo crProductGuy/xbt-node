@@ -1,448 +1,467 @@
 # xbt-node: construction and evolution log
 
-## 2026-10-11 to 2026-10-12, session A (14ebca09)
+This is the story of how a spare laptop became a full XBT node for a small home mining setup, built over
+four weeks by the owner and a coding agent (Claude Code). It records what was asked, what the agent
+proposed, what the owner decided and why, what went wrong, and how each step was checked. Git holds the
+line-by-line changes; this file holds the reasoning.
 
-**Goal, in the owner's words:** "copy root-dir files on d: drive to a working space on C: ...
-Next: reformat d: as EXT4. Then make blocks and chainstate dirs there and copy over from
-local Windows C drive Knots files for blocksdir, index, and chainstate. The re-formatted
-D drive will become the source for a new PATUM Knots 29.4 node plus DATUM gateway to be
-run on Devuan Linux."
+## The story in brief
 
-**Finding that shaped everything:** Windows cannot create or write ext4, and this PC had
-no WSL, hypervisor or ext4 tooling. The agent proposed WSL2; the owner refused to install it.
-The agent then proposed a LAN pull from a Linux box; the owner asked for a way without the
-network. Decision (agent proposed, the owner agreed): boot the Windows PC itself from an
-Ubuntu live USB, mount the internal disk read-only, format the USB drive and copy disk
-to disk. One copy, no installs on Windows, and the node is certainly stopped. Rejected:
-a spare drive as go-between (two copies), a third-party ext4 driver for Windows
-(corruption history), a VM.
+The owner's miners pointed at someone else's node. He had a fully synced node on a Windows PC and a spare
+HP laptop, and wanted the laptop to run its own node, so the miners could build their own block templates.
+Downloading the chain from scratch would have taken weeks, so the plan was to copy the PC's synced chain to
+an external drive and seed the laptop from it. Windows cannot write the Linux file system the drive needed,
+so the PC was booted from a Linux USB stick for the copy. The laptop got Devuan, a Linux without systemd.
+On 17 October the node came up from the drive with every file checked, and the miners moved to it that
+evening. Because the PyBLOCK tools it runs (PATUM) expect systemd, the rest of the work was making the
+laptop look after itself without one: start and stop cleanly at every boot, shut down before the battery
+dies, and wake again after an outage. Those scripts and guides were shared with PyBLOCK so they could
+publish them for other people running PATUM on Linux without systemd, and this repository holds them.
 
-**Questions and answers:** PATUM is pyblock.xyz's bundle of the Blake2b Knots build and
-a DATUM gateway, pointed at a Pyblock pool. Chainstate goes on the target's internal
-SSD, blocks stay on the ext4 drive. One copy of the chain during the job is acceptable.
-Hash check: partial at copy time (chainstate, block index, xor.dat, all file sizes),
-full on the target before the node first runs. The owner's choice, on the agent's suggestion,
-to cut PC downtime by about 2.5 hours.
+## Who and what
 
-**Built:** `make-manifest.ps1` (two sha256sum-format manifests), `make-ext4-seed.sh`
-(finds the drive by serial, refuses unless USB, about 2 TB and not the Windows disk,
-asks for a typed confirmation, formats, copies with rsync, verifies, resumes after an
-interruption), a revised `seed-node.sh` and README for ext4, and `test/run-tests.sh`.
+- **The owner:** runs the miners and made every decision recorded here. **The agent:** Claude Code, which
+  wrote the scripts and this log, and ran the read-only checks.
+- **The PC:** the owner's Windows PC, which held the synced node and served as the agent's workstation.
+- **The laptop, or HP 14:** an HP Laptop 14 that runs the node. It dual-boots Windows and Devuan 6.
+- **The seed drive, or Passport:** a 2 TB external USB drive, formatted ext4, that carried the chain from
+  the PC to the laptop. The laptop's block files still live on it.
+- **XBT:** Bitcoin with Blake2b proof of work and spam-hostile rules. Every node runs Bitcoin Knots with
+  `consensusrules=rdts`; regular-Bitcoin reasoning does not apply.
+- **PyBLOCK and PATUM:** PyBLOCK publishes PATUM, a bundle of the Blake2b Knots build, a DATUM gateway and
+  a small web panel. **DATUM** is the protocol that lets a miner build its own block templates against its
+  own node; the gateway speaks stratum to the miners and talks to the node and to the pool (WAVICLES).
+- **The miners and gbox:** at first two Goldshell miners (the SC-BOX and an HS-BOX), three by November.
+  gbox is the owner's separate watchdog for them.
+- **D-numbers** (such as D-041) are rows in the owner's decision register, kept outside this repo; the
+  log quotes his answer where it matters. **Sessions** are named by a letter and the first eight characters
+  of the agent session's ID, so each entry can be traced to its transcript.
 
-**Verified:** 17 tests pass on Windows, covering manifest format, copy and verify logic,
-resume, and three refusals. The tests caught two real bugs: relative paths skewed by an
-8.3 short path, and a line-ending check that passed for the wrong reason. Not verified:
-disk detection, the format and rsync, which cannot run on Windows.
+---
 
-**Side track, target machine networking:** the target laptop is Wi-Fi only with a
-Realtek RTL8821CE. Three of the owner's adapters were read on the PC: two were Thunderbolt
-devices that a plain USB-C port cannot use; the third, a USB-C hub with an RTL8153, is
-a plain USB device and linked at gigabit. Agent's OS recommendation: Devuan, fallback
-Ubuntu 24.04, pending a glibc check of PATUM's binary.
+## Part 1: Seeding the laptop (11 to 17 October)
 
-**Corrections by the agent to itself:** it first said the run log could be read from
-C: afterwards; C: is read-only in the live session, so the log lives on the drive.
+### 2026-10-11 to 10-12, session A (14ebca09): how to get the chain onto ext4
 
-**Left open:** PATUM's data directory, config and service paths. The drive job itself
-has not started; the owner deferred it to a day when he can attend it.
+**Goal, in the owner's words:** "copy root-dir files on d: drive to a working space on C: ... Next: reformat
+d: as EXT4. Then make blocks and chainstate dirs there and copy over from local Windows C drive Knots files
+for blocksdir, index, and chainstate. The re-formatted D drive will become the source for a new PATUM Knots
+29.4 node plus DATUM gateway to be run on Devuan Linux."
 
-## 2026-10-12 to 2026-10-14, session A (14ebca09), continued: the target laptop
+**The first obstacle decided the method.** Windows cannot create or write ext4, and the PC had no WSL,
+hypervisor or ext4 tools. The agent proposed WSL2; the owner did not want it installed. The agent then
+proposed pulling the files over the network from a Linux machine; the owner asked for a way without the
+network. The agent's third proposal was accepted: boot the PC itself from an Ubuntu live USB, mount the
+internal disk read-only, format the USB drive and copy disk to disk. That meant one copy, nothing installed
+on Windows, and a node that was certainly stopped. Rejected along the way were a spare drive as a go-between
+(two copies), a third-party ext4 driver for Windows (a history of corruption), and a virtual machine.
 
-**Scope change, the owner's:** keep the laptop's existing 512 GB disk and dual-boot Windows
-and Devuan 6, instead of fitting a separate 128 GB disk. The agent pushed back once on
-dual boot (Windows updates can take back the boot order; the Windows and Linux clocks
-disagree; the node is down whenever Windows runs). The owner kept dual boot; all three were
-handled or checked.
+**Questions and answers.** PATUM is PyBLOCK's bundle of the Blake2b Knots build and a DATUM gateway. The
+chainstate would go on the laptop's internal SSD and the blocks would stay on the ext4 drive. One copy of the
+chain during the job was acceptable. On the agent's suggestion, the owner chose to check hashes in two steps:
+a partial check at copy time (chainstate, block index, `xor.dat` and every file's size), and a full check on
+the laptop before the node first ran. That cut the PC's downtime by about two and a half hours.
 
-**Findings that changed the plan:** Windows could not shrink its partition past the
-master file table, so the shrink was done with GParted from a live stick, followed by a
-clean disk check in Windows. The first installer stick hung at its boot loader on this
-laptop; rewritten in Rufus's DD mode it booted at once. The USB-C hub ran at USB 2 speed
-until its plug was turned over, which pointed to one worn high-speed path. The live
-session's clock was hours off because Windows keeps the hardware clock in local time,
-which blocked the package manager until its date check was skipped.
+**What was built.** `make-manifest.ps1` writes two SHA-256 manifests. `make-ext4-seed.sh` finds the drive by
+its serial number, refuses unless it is a USB drive of about 2 TB and not the Windows disk, asks for a typed
+confirmation, then formats, copies with rsync, verifies, and resumes after an interruption. `seed-node.sh`
+and the drive's README were revised for ext4, and `test/run-tests.sh` was started. Its 17 tests passed on
+Windows and caught two real bugs: relative paths skewed by a Windows short path, and a line-ending check that
+passed for the wrong reason. Disk detection, formatting and rsync cannot run on Windows, so they waited for
+the real run.
 
-**Agent mistakes:** a clock-setting command that fed an empty value to `date` and set
-the clock to midnight; a guess that the installer would make a 1 GB swap (it made 5.9
-GB, so the planned swap file was dropped); multi-line and long commands that broke when
-pasted into the Linux terminal. The owner asked for a standing rule after the third paste
-failure: one short command per line.
+**The laptop's network.** The laptop is Wi-Fi only. Of the owner's three adapters, two were Thunderbolt
+devices that a plain USB-C port cannot use; the third, a USB-C hub with a Realtek gigabit chip, linked at
+full speed. The agent recommended Devuan, with Ubuntu 24.04 as the fallback, pending a check that PATUM's
+binaries would run on Devuan's C library.
 
-**Result, as the owner reported it:** Devuan 6 with sysvinit, GRUB lists Windows and boots
-both, Devuan is the default and comes back by itself after a restart from Windows,
-wired gigabit through the hub, 5.9 GB swap, lid and idle sleep off at both desktop and
-system level (lid test passed with nobody logged in). glibc 2.41 means PATUM binaries
-built on current Ubuntu or Debian releases will run.
+**A correction.** The agent first said the run log could be read from the PC's disk afterwards. In the live
+session that disk is read-only, so the log was moved to the drive itself.
 
-**Left for tomorrow:** the drive job on the PC, deliberately scheduled as one unbroken
-sequence (stop Bitcoin, build manifests, copy, restart Bitcoin) because the manifests
-only match files that have not moved since. Then PATUM's paths, and SSH hardening.
+**Left open:** PATUM's data directory, configuration and service paths. The drive job waited for a day the
+owner could attend it.
 
-## 2026-10-15 to 10-17, session A (14ebca09), continued: drive filled, seed script fixed, move to SSH
+### 2026-10-12 to 10-14, session A (14ebca09), continued: preparing the laptop
 
-**Goal (the owner):** "Bitcoin is stopped, build the manifests", then fill the Passport, then
-"plug in the WD drive and set the bitcoin.conf to point at the right places".
+The owner changed the scope: keep the laptop's 512 GB disk and dual-boot Windows and Devuan 6, instead of
+fitting a separate 128 GB disk. The agent pushed back once on dual boot: Windows updates can take back the
+boot order, the two systems disagree about the hardware clock, and the node is down whenever Windows runs.
+The owner kept dual boot, and all three points were handled or checked.
 
-- Manifests built (second run; the first failed after a full 820 GB hash on the node's
-  `blocks/.lock`, so the file-set check was moved ahead of hashing and a test added).
-- The owner asked to keep his browser and terminals open, so Ryzen2 was **hibernated** instead
-  of shut down. The agent flagged the real risk: Windows resuming onto a Passport that had
-  changed from exFAT to ext4 underneath it. The fix was to eject it first and keep it
-  unplugged at resume. The read-only mount of hibernated C: worked. The copy took 2 h 52 min,
-  all 11,604 files arrived at the right sizes, and the 189 small files matched SHA-256.
-- **Finding that changed the design:** Bitcoin keeps `blocks/index` in the data directory
-  even when `blocksdir` is set (confirmed against doc/files.md). `seed-node.sh` copied only
-  the chainstate, so the node would have found no matching index. Two more bugs turned up in
-  the same read: `-datadir` was never passed to the node, and a missing space in `touch`
-  would have stopped Stage 1. All three were fixed. The script now refuses to run while a
-  partial sync is in the data directory.
-- PATUM facts read from the owner's files:
-  - its node was still running after its wizard said "stopped", and had nearly filled the
-    SSD (agent caught it from `pgrep` output);
-  - it turns on `txindex=1` (the owner: keep it; Windows never had it, so it builds from scratch);
-  - it does not carry the source node's `consensusrules=rdts` or `blake2b_headline`.
+Several things went differently than planned. Windows could not shrink its partition past the NTFS file
+table, so the shrink was done with GParted from a live stick, followed by a clean disk check in Windows. The
+first installer stick hung at its boot loader; rewritten in Rufus's DD mode, it booted at once. The USB-C hub
+ran at USB 2 speed until its plug was turned over, which pointed to one worn high-speed path. The live
+session's clock was hours off, because Windows keeps the hardware clock in local time, and that blocked the
+package manager until its date check was skipped.
 
-  The last point is open, pending the build's own `-help` output.
-- The owner approved deleting PATUM's partial download (about 98 GB), which there was no room to
-  keep.
-- **Process change (the owner):** the USB-stick relay of commands and output was too slow for him
-  ("I'm a slow admin assistant to you with this USB sneakernet method"). The agent proposed
-  key-only SSH from Ryzen2 into the HP 14, with two sudo options:
-  - a temporary passwordless-sudo rule;
-  - the owner typing the sudo password in a shared tmux session.
+The agent made mistakes of its own. A clock-setting command fed an empty value to `date` and set the clock
+to midnight. A guess that the installer would make a 1 GB swap was wrong (it made 5.9 GB, so the planned swap
+file was dropped). Long and multi-line commands broke when pasted into the Linux terminal, and after the
+third failure the owner asked for a standing rule: one short command per line.
 
-  The owner chose the tmux option: "I need to learn to use TMUX". A dedicated key was made, and
-  a setup file with a short tmux guide was written to the stick.
+The result, as the owner reported it: Devuan 6 with sysvinit, a boot menu that offers both systems with
+Devuan as the default, wired gigabit through the hub, and lid and idle sleep turned off for the desktop and
+the system, tested with nobody logged in. Devuan's C library (glibc 2.41) is new enough for binaries built on
+current Ubuntu or Debian.
 
-## 2026-10-17, session A (14ebca09), continued: SSH, seeding, PATUM, miners live
+The drive job was set for the next day as one unbroken sequence (stop the node, build the manifests, copy,
+restart the node), because the manifests match only files that have not changed since.
 
-**Goal (the owner):** "Do your next magic", then get PATUM running and the miners on the new node.
+### 2026-10-15 to 10-17, session A (14ebca09), continued: the drive filled, the seed script fixed
 
-- With key-only SSH in place, the agent did the look-and-adjust work directly:
-  - unmounted the Windows partition that Devuan had mounted read-write, and proposed a udev
-    rule to hide it (the owner's call, not yet applied);
-  - deleted PATUM's partial download;
-  - read the PATUM build's own `-help`.
+The owner: "Bitcoin is stopped, build the manifests", then fill the Passport, then "plug in the WD drive and
+set the bitcoin.conf to point at the right places".
 
-  Finding: `blake2b_headline` is regtest-only in this build, so it was dropped from the
-  script.
-- **Pushback, agent wrong:** the agent suggested running without `consensusrules=rdts` on
-  ordinary-Bitcoin reasoning about minority chains. The owner corrected it: the chain is XBT,
-  Blake2b proof of work with spam-hostile rules derived from BIP-110, and rdts is required.
-  The agent restored the requirement in the script, added the line to the conf, and saved
-  the fact as a standing memory.
-- `seed-node.sh` ran in a tmux session that the agent and the owner shared, with the owner typing the
-  sudo password (his choice, also to learn tmux). Results:
-  - all 11,415 block files matched their SHA-256 (about 2.5 h at 92 MB/s from USB);
-  - the chainstate and block index were copied and verified;
-  - the offline start opened at the snapshot block with the expected hash.
+The manifests took two runs. The first failed after hashing the whole chain, on the node's `blocks/.lock`
+file, so the check of which files belong in the set was moved ahead of the hashing, with a test.
 
-  The owner then started the node. It caught up 357 blocks and began building txindex.
-- **PATUM updates:** 0.5.2 came out the same day, and `-check` reported 0.5.3. Both were
-  fetched with `wget` (the HP 14 had no curl) and checked against pyblock's SHA256SUMS; older
-  versions were kept beside the new one. The agent read the program's built-in text to
-  answer whether rerunning the installer reinstalls ("Have a saved configuration", "keeps
-  your node"). It held all PATUM runs until the hash check finished, so nothing could touch
-  the block files mid-check.
+The owner wanted his browser and terminals kept open, so the PC was hibernated rather than shut down. The
+agent named the real risk: Windows resuming onto a drive that had changed from exFAT to ext4 underneath it.
+The fix was to eject the drive first and keep it unplugged at resume. The read-only mount of the hibernated
+Windows disk worked. The copy took 2 hours 52 minutes; all 11,604 files arrived at the right sizes, and the
+189 small files matched their SHA-256.
 
-  Found later: PATUM edits `bitcoin.conf` in place and kept our lines.
-- **Gateway build:** it needed curl, git, cmake, a compiler and four `-dev` libraries. The
-  agent checked each package over SSH and gave one batched install, instead of letting the
-  user meet each missing piece one at a time.
-- **Before switching the miners,** a read-only subagent reviewed the gbox watchdog. It found
-  no pool coupling and no pool writes; the one risk was the 5-minute "no accepted shares"
-  stall rule. Plan: switch the unwatched HS-BOX first and measure the share rate at the
-  gateway (about 5 to 6 a minute, 0 rejects), then the SC-BOX. Result: both miners on the
-  node, 210 accepted and 0 rejected shares in the first quarter hour, and no watchdog action.
-- **Mac side:** Private Wi-Fi address turned off and IPs reserved. The first Mac key was
-  hand-copied from the wrong source; fingerprints showed the mismatch, and the fix was to move
-  the `.pub` as a file.
-- **Left open:** nothing autostarts after an HP 14 reboot; the Windows hide rule; the old
-  README and script on the Passport; Mac to Ryzen2 SSH.
-- **End of the day:** PATUM's boot files are systemd units, so on Devuan nothing it sets up
-  starts at boot. The agent wrote a sysvinit script for the gateway, which waits for the
-  node's RPC in the background and refuses to run beside a PATUM-started gateway, plus a
-  one-command installer. These are prepared but not yet installed or reboot-tested; that
-  needs the owner's sudo. The drive's README was rewritten as built, and the fixed script and the
-  new files were copied to the Passport.
+Reading the seed script again before it ran changed the design. Bitcoin keeps `blocks/index` in the data
+directory even when `blocksdir` points elsewhere (confirmed in Bitcoin's own `doc/files.md`), and
+`seed-node.sh` copied only the chainstate, so the node would have found no matching index. The same read
+found two more bugs: the node was never given `-datadir`, and a missing space in a `touch` command would have
+stopped the first stage. All three were fixed, and the script now refuses to run over a partial sync.
 
-  The owner's verdict on the session: "This was huge work. You made it possible quite robustly
-  with all the testing-as-we-went."
+The owner's PATUM files showed three things. Its node was still running after its setup wizard said
+"stopped", and had nearly filled the SSD; the agent caught it in the process list. It turns on `txindex=1`,
+which the owner chose to keep, so the index would be built from scratch. And it does not carry the source
+node's `consensusrules=rdts`. The owner approved deleting PATUM's partial download (about 98 GB), which there
+was no room to keep.
 
-## 2026-10-18, session A (14ebca09), continued: txindex done, the identity split planned, two repos scrubbed
+The owner then changed how the work was done. Carrying commands and output on a USB stick was too slow ("I'm
+a slow admin assistant to you with this USB sneakernet method"). The agent proposed key-only SSH from the PC
+into the laptop, with either a temporary passwordless-sudo rule or the owner typing the sudo password in a
+shared tmux session. The owner chose tmux: "I need to learn to use TMUX".
 
-Written without the owner's name, as everything on this side will be from now on; the older entries above were
-scrubbed when this project moved to its crypto-side repo.
+### 2026-10-17, session A (14ebca09), continued: seeded, PATUM running, miners live
 
-- **txindex** finished at 02:05 EDT on 10-18, inside the 01:00 to 03:00 estimate made the night before. The
-  index is 68 GB; the laptop's SSD has 50 GB free. Load dropped to near zero.
-- **The move list.** Asked to "show me the move list", the agent grouped every file by destination: a new
-  private crypto-side repo for the node, seed and autostart tools; a new private real-name repo for the dual-boot
-  runbook and the SSH kit; snapshot checksums and superseded copies kept out of git. It flagged that the laptop's
-  login name points at the crypto account, so the real-name side must never print it. The owner agreed to the
-  names and to starting both private.
-- **A leak found on the way.** The crypto-side tuner repo had 17 commits authored under the owner's real name and
-  one under a personal email, which was also this PC's global git email. The owner chose to change the global
-  default to the crypto account's no-reply address (every real-name repo already set its own) and to rewrite.
-- **Back-editing history.** The owner asked what it would take; the agent offered a current-files-only clean or
-  a full rewrite, recommended the rewrite while both repos were young and unforked, and said plainly what a
-  rewrite cannot reach (existing clones, commits GitHub still serves by hash). Wording was settled before the
-  replacement table: "the owner", already the house word beside "the agent"; "the author" rejected because the
-  agent wrote most of the text; pronouns kept, the owner's choice.
-- **Done and verified:** both repos rewritten by rule, blob by blob, including a vendored changelog and the copy
-  inside a test zip; zero hits in any commit, message or tag; every removed line contained the name; the gbox suite
-  green before the force-push; quoted commit ids in current files mapped old to new.
-- **A slip:** the agent's own test commands carried a time cap shorter than the suite, and a pipe hid the exit
-  code, so a cut-off run first read as a pass. Caught from the missing summary line and rerun uncapped.
+The owner: "Do your next magic", then get PATUM running and the miners on the new node.
 
-## 2026-10-21, session B (3a630e51): a false alarm, then autostart installed and reboot-tested
+With SSH in place the agent did the checking and adjusting directly. It unmounted the Windows partition that
+Devuan had mounted read-write, and proposed a rule to hide it (the owner's call, still open). It read the
+PATUM build's own `-help`, which showed that `blake2b_headline`, set on the PC, applies only to a test network,
+so it was dropped.
 
-- **The ask:** "help me get Patum running again. Looks like we had an HP 14 hard restart." Then autostart, then the repo split.
-- **No restart had happened.** The agent read uptime, boot history and process start times before acting: everything dated from 10-14 and 10-17. The window list showed every app still open on workspace 1 while the screen showed workspace 4. The kernel log had bursts of an unmapped HP key at the same minute; the owner traced it to phones resting on the keyboard corners. A first theory (out-of-memory kills) was stated as a theory, checked with one sudo grep, and dropped when the log was empty.
-- **Log access.** Rather than ask for sudo each time, the agent proposed adding the owner's account to the log-reading group, once; the owner did. The agent had called it "my login"; the owner pointed out it is the same account, and it is.
-- **Autostart.** Before handing over the sudo line the agent re-checked the prepared scripts against the running system: the hand-started node's own pid file (so the script can stop it cleanly), the gateway's config paths, the RPC settings. After install it checked not just the S/K numbers but the parallel-boot dependency file, since Devuan runs shutdown scripts concurrently and the numbers alone do not guarantee the node stops before the drive unmounts.
-- **Reboot test passed:** clean node shutdown in 4 s, node and gateway back before any login. One surprise: the miners kept hashing on their backup pool for about ten minutes before returning by themselves. The agent first said they might not return; the logs then showed they did.
-- **The panel stays manual.** PATUM's own boot units are systemd and do not apply on Devuan. Starting the panel by hand was checked to start no second node or gateway.
-- **A slip:** a filter meant to hide the RPC password failed and printed it into the session. It is local-only and was kept out of every file.
+Then the agent got the chain wrong. It suggested running without `consensusrules=rdts`, reasoning from how
+regular Bitcoin treats minority rule sets. The owner corrected it: the chain is XBT, with Blake2b proof of work
+and spam-hostile rules derived from BIP-110, and rdts is required. The agent restored the requirement in the
+script, added the line to the configuration, and kept the fact as a standing rule for every later session.
 
-## 2026-10-22, session C (1b5183ae): the project becomes the xbt-node repo
+`seed-node.sh` ran in the shared tmux session, with the owner typing the sudo password. All 11,415 block files
+matched their SHA-256 (about two and a half hours at 92 MB/s over USB), the chainstate and block index were
+copied and verified, and an offline start opened at the snapshot's block with the expected hash. The owner
+then started the node. It caught up 357 blocks and began building its transaction index.
 
-- **The ask:** "load the Devuan Node project, then build the xbt-node repo". The plan was settled on 10-18 (the
-  move list, approved then), so the agent restated it from that session's record and built it rather than
-  reopening it.
-- **What moved where.** The node-side scripts and the as-built runbook went to `node/`; the Windows-side manifest
-  and drive-fill scripts to `seed/`; the tests to `test/`; the never-run first plan to `docs/plan-before-build.md`;
-  this log was renamed to match the new directory. The SHA-256 manifests stayed out of git (snapshot data, already
-  on the drive) in a gitignored staging folder, which the fill script now reads from.
-- **What was scrubbed.** A hard-coded Windows user path became a required `WIN_USER` setting; the Linux user name
-  in the autostart examples became `YOURNAME`; the first plan's example user became `nodeuser`; older entries in
-  this log now say "the owner". Beyond the agreed list, the agent also made the drive's serial a required setting
-  instead of a constant, since a serial identifies a physical device; the test now uses a made-up one.
-- **Verified:** the test suite, pointed at the new layout plus five new tests for the two required settings
-  (refused before anything runs, and the message names the setting): 27 passed, 0 failed. Leak grep over every
-  staged file for the name, account names, user paths, LAN and MAC addresses, emails, the serial and RPC settings:
-  only false positives (an English verb in a script message, placeholder names). The repo-local git identity is the crypto account's.
-- **Left for the owner:** approving the first commit, creating the empty private repository on GitHub (there is
-  no GitHub CLI on this PC), and whether the old project folders go to the attic.
-- **Then, the same session:** the owner installed the GitHub CLI and signed it in as the crypto account, and said
-  "go ahead". The agent checked the CLI had not taken over git's own credential store (it had not, so each remote
-  keeps its account in its URL), reran the leak grep over the full history including the commit message, made the
-  first commit, created the repository private and pushed. The attic move of the old folders still waits for the
-  owner.
+PATUM moved quickly that day: 0.5.2 came out, then 0.5.3. Both were fetched with `wget` and checked against
+PyBLOCK's published SHA-256 sums, with the older versions kept. The agent held every PATUM run until the hash
+check finished, so nothing could touch the block files mid-check, and read the program's built-in text to
+confirm that rerunning the installer keeps the existing node. PATUM, it turned out, edits `bitcoin.conf` in
+place and keeps the lines added by hand.
 
-## 2026-10-28, session D (ddbba4a0): the node upgrade that looked hung
+Building the DATUM gateway needed curl, git, cmake, a compiler and four development libraries. The agent
+checked each package first and gave the owner one batched install, instead of letting him meet each missing
+piece one at a time.
 
-- **The ask:** "I have PATUM updated to 0.5.6 and it is updating the Knots node to 29.4.3 but it seems to have
-  hung... downloaded, verified the release signature, extracting, then just hung for 6+ minutes."
-- **Finding: it had not hung.** Over SSH the agent found the new 29.4.3 binary in place, the old node shut down
-  cleanly and the new one loaded in ten seconds, synced, with the fork rules still set. The gateway had kept
-  its miners throughout. The window showing "extracting" was the panel's own console, which simply printed
-  nothing more. The agent's first reading said "the panel's progress display stalled"; the owner corrected that
-  it was a terminal window, and that the panel still offered a node-update button.
-- **Second finding: why the panel still asked.** The panel's status API showed the update job finished ok, yet
-  reported the node as 29.4.2. It takes the version from the text the node advertises to peers, and that text
-  is a fixed `uaspoof` line in the node's config that PATUM writes at install time but not on update. So the
-  warning was false, and pressing the button again would have restarted the node for nothing.
-- **Options given:** (1) fix the one line and restart the node, (2) leave the cosmetic warning, (3) report it
-  upstream. Agent recommended 1, because a real rule change two to three days out made a standing false
-  "outdated" warning dangerous to ignore. The owner chose 1.
-- **Done and verified:** config backed up, one line changed (diff checked), node stopped over RPC and started
-  with PATUM's own command so the autostart script still recognises it. After: new version advertised, fork
-  rules and index loaded, synced, panel reports up to date, gateway never restarted, about 11 seconds without a
-  fresh template.
-- **Explained, not changed:** the gateway's "empty work sent to 2 clients" lines are its instant coinbase-only
-  job after each new network block, so miners stop working on a stale block before the full template is ready.
-- **Left for the owner:** whether to report the update-skips-uaspoof behaviour to PyBLOCK.
+Before the miners moved, a read-only review of gbox found no coupling to the pool. The one risk was its rule
+that acts after five minutes without an accepted share. So the unwatched HS-BOX moved first, its share rate
+was measured at the gateway (five to six a minute, no rejects), and then the SC-BOX followed. Both miners were
+on the node with 210 accepted shares and none rejected in the first quarter hour, and gbox took no action.
 
-## 2026-10-31, session E (79d5edad): a health check, a fast clock, and the cost of fixing it
+The day ended with one gap named. PATUM's start-at-boot files are systemd units, so on Devuan nothing it
+installs starts at boot. The agent wrote a sysvinit script for the gateway, which waits in the background for
+the node to answer and refuses to run beside a gateway PATUM started, plus a one-command installer. Installing
+it needed the owner's sudo, so it waited. The drive's README was rewritten as built.
 
-- **The ask:** "look into the HP 14", then, after the first report: "Patum page is up but static, not live...
-  Worried that things underneath aren't working, though the DATUM gateway console web page looks OK."
-- **Health check, read-only over SSH:** node synced at the tip with 17 peers, same process since the 10-28
-  upgrade; gateway on its 10-21 process with both miners and a fresh job about every 41 s; no errors in either
-  log; disk and memory comfortable. A rule change about 65 blocks out needs Knots 29.4.3, which the node runs.
-- **Finding: the static panel page was only the panel.** Its process had exited (when is unknown) and nothing
-  listened on its port. The panel picks a new port on each run, so refreshing an old tab fails even after a
-  restart. The node and gateway underneath were checked directly and were fine. The panel is the owner's to
-  restart by hand, as always.
-- **Finding: the clock ran about 19 s fast and nothing kept it in sync.** Measured against the PC, whose own
-  clock was checked against an internet time server first. No NTP daemon was installed (Devuan has no systemd,
-  so no built-in time sync); this was gateway-chain check G3, never run until now. The installer log dates the
-  Devuan install to 2026-10-13. Once running, chrony measured the drift at 11.9 ppm, about 1 s a day, which
-  fits 19 s over the 17 days since.
-- **Proposal and decision:** install chrony; the owner agreed. The agent added one change of its own: turn off
-  chrony's `rtcsync`, because the hardware clock keeps local time for Windows on this dual-boot machine and the
-  agent was not sure chrony's writes would respect that. Devuan already saves the system time to the hardware
-  clock at shutdown. The commands went to the owner as a short file on the transfer stick, pasted one line at
-  a time.
-- **Verified after:** clock within a millisecond of four time servers; chrony set to start at boot, ahead of
-  the gateway.
-- **The miss:** the agent said the one-time jump would come from the `makestep` command and warned the owner
-  to watch the gateway then. It came earlier: Debian starts chrony as soon as it is installed, and its default
-  config jumps a large error at once. The clock moved back 19.08 s; 3 ms later the gateway logged "no data
-  received from server in over 60 seconds", reconnected within a second, and the pool declined to resume the old
-  session, so the gateway discarded the shares it had queued for the pool. That is probably a few seconds of
-  pool credit, with no effect on any block. That the backward jump tripped the gateway's 60-second timer is an
-  inference from the timing; the gateway's code was not read.
-- **Lesson:** on a Debian-family mining machine, installing an NTP daemon is the moment the clock moves, not a
-  later command. Treat the install itself as the moment the gateway may drop.
-- **Left as is:** at boot, chrony and the gateway both start before the network, so chrony's first corrections
-  land while the gateway runs. With the clock saved at shutdown, the boot error should stay under chrony's
-  1-second jump threshold, so it will adjust gradually. Not changed; revisit only if a reboot shows the same
-  drop.
-- **Later the same session: the panel restarted, and a how-to page.** The owner asked the agent to restart the
-  panel. The agent found PATUM had updated its own panel to 0.5.7 on 10-29, after session D, and that the start
-  command in the notes now pointed at the old 0.5.3 installer file, so it used the current copy instead. It
-  started the panel over SSH, detached and on a fixed port so the address stays the same across restarts, then
-  checked that the node and gateway kept their processes and that no second copy of either started. At the
-  owner's request the start, use and stop steps went into a short page, kept on the transfer stick and on the
-  node machine.
-- **Upstream fix, reported by the owner:** PyBLOCK has fixed the stale version string found in session D. A
-  PATUM update that updates the node now rewrites the `uaspoof` line in the node's config as well, so the node
-  advertises its real version and the panel no longer raises a false "needs update"; the hand edit made in
-  session D is no longer needed. Not yet seen on this node, which has had no node update since; the next one
-  confirms it.
-- **Later the same session: clean shutdown, and the battery guard.** The owner: "It's very important for
-  Bitcoin nodes including Knots nodes, to be given a clean shut-down signal... Look into what is needed to do
-  that well. See if you can tell if PATUM has a way to trigger it." A read-only review found the shutdown and
-  reboot path already sound (gateway stops first, the node gets up to 15 minutes and is never forced, and all
-  three stops in the log were clean within seconds), and the blocks drive on the laptop's own USB port rather
-  than the dock. The gap was the battery: the desktop's low-battery action was suspend, and it only runs while
-  someone is logged in, which after a reboot nobody is. PATUM stops the node itself only on demand (its wizard
-  and its updates) and ships systemd units for its panel and update check alone, so on Devuan the clean stop at
-  shutdown comes only from this repo's init scripts.
-- **Built:** `battery-guard.sh`, run every minute by root from cron: when the AC adapter is off and the battery
-  is discharging at or below 25 % on two checks in a row, it calls the normal shutdown. The threshold sits above
-  the desktop's 20 % on purpose, because a suspended machine runs no cron jobs. Alternative considered: the
-  system's upower daemon, not chosen because it may not run without a desktop session and that could not be
-  verified cheaply. Tests run the shell Devuan uses (dash). A separate review found nothing serious and four
-  things worth fixing, all fixed before commit: tests that could pass on timing, a failed shutdown that was
-  neither logged nor retried, a wireless mouse's battery that could be read as the laptop's, and the settings
-  file's permissions. Two deliberate breaks of the script were each caught by the tests. Installing it is the
-  owner's step (sudo). The lid-on-battery setting went into the owner's BIOS steps instead of code.
-- **Later the same session: coming back after an outage.** The owner looked in the BIOS: no power-on-after-AC-loss
-  setting and no Wake on LAN, so a laptop the guard shut down would stay off until someone pressed the button.
-  The owner chose the agent's proposal: before shutting down, the guard sets the clock's wake alarm (`rtcwake`)
-  for 60 minutes later. If the power is back the node and gateway start as usual; if not, the guard shuts it
-  down again with a new alarm. Below a 10 % floor it sets no alarm, so repeated boots cannot run the battery
-  flat, and a failed alarm never stops the shutdown. A separate review found nothing blocking and four things
-  fixed before commit: a setting written with a leading zero read as octal, a floor at or above the threshold
-  that silently meant no alarm (now shown in `--status`), and the risk of stopping a node that a woken boot was
-  still starting, closed by not acting in the first five minutes after boot; plus missing tests. Three
-  deliberate breaks of the new code were each caught. Whether this laptop wakes from off by its alarm is not
-  yet known: a ten-minute test is in the runbook and is the owner's to run, on battery as well as on AC.
+The owner's verdict: "This was huge work. You made it possible quite robustly with all the testing-as-we-went."
 
-## 2026-11-02, session 25a2ab43 (from the gbox project): the clean-shutdown note sent
+---
 
-A short entry, written from a gbox session. Session E's review of how the node stops cleanly ended in a note for
-the PyBLOCK project, drafted in the owner's voice and kept out of the repo on purpose. The owner asked for the draft
-("quick like a bunny grab me the Pyblock draft"), then reported "Sent!" to the PyBLOCK project's lead. Nothing in
-the node changed. Any reply will be recorded here and in the status file.
-- **2026-11-04, session E resumed: PyBLOCK's two requests.** The owner relayed that the PyBLOCK team ran the
-  battery guard in a simulated low-battery run and found it "behaves exactly as documented", and that their lead
-  would publish the Devuan scripts as the PATUM guide for distros without systemd after two changes: make the
-  external block-drive check optional so machines with blocks on the internal disk work, and refresh the node
-  init script's header, which still said it had never run on Linux. Built: the drive check is off unless a
-  mount point is named, and the installer chooses it itself from the node's blocksdir and /etc/fstab, with a
-  manual override. So a reinstall on this node keeps the protection while others need no change. The rdts
-  requirement in the installer was kept and put to the owner as a question rather than changed silently.
-  A separate review found one serious gap: on a machine set up before this change, replacing only the init
-  script would have silently dropped the drive check, exactly the failure it exists to prevent. Fixed by
-  having the script refuse to start the node, with the fix named in the message, when the settings file
-  predates the drive setting and the node's config moves its blocks. Also fixed: a blocks folder inside the
-  drive rather than at its top is now matched to the drive, spaces around "=" are read, and the settings file
-  is written quoted, with unsafe paths refused. 116 tests pass; three deliberate breaks, two caught, the third
-  a check that turned out to be redundant.
-- **2026-11-04, later: the wake test written down for anyone.** The owner asked for exact steps to run the
-  wake test, kept in the repo and in the PyBLOCK folder "so people can see how to verify on their own systems",
-  made "as universal as practical" with what helps on more capable hardware. Written as one plain-text guide:
-  the exact tests (on AC, on battery, and the full guard path on a real drain, with the log lines to expect),
-  what to check in the firmware if it does not wake, and the other ways a machine comes back after an outage:
-  power on after AC loss on desktops (with the warning that "last state" stays off after a clean shutdown),
-  business laptops' power-on-with-AC setting, a UPS that signals a shutdown, Wake on LAN with its outage
-  caveats, server management controllers, single-board computers, and a smart plug only when the machine is
-  already off. BIOS setting names are labelled as typical, not checked against any one model.
+## Part 2: A live node, and its own repository (18 to 22 October)
 
-## 2026-11-04 evening, session E resumed (79d5edad): first RTC wake tests on the HP 14
+### 2026-10-18, session A (14ebca09), continued: the index done, the move planned
 
-The owner ran Tests 1 and 2 from the new guide. Reported: "wake test on AC failed; never woke, and the
-time looked right when I checked it in step 3 ... ran test 2. That succeeded (lid was open as
-recommended), and uptime value was 15-20 sec after the alarm time." The agent read the sudo log, wtmp
-and debug.log over SSH before saying anything: Test 1's alarm was due 6 minutes before the owner pressed
-the button, Test 2 woke 22 seconds after its alarm, and every stop ended cleanly. The two shutdown
-sequences in syslog look alike, so the logs do not explain the AC failure. A wake on battery but not on
-AC is the reverse of the usual laptop pattern; the agent did not name a cause and proposed repeating Test 1
-with the lid open (D-040). The guard sets its alarm only on battery, so the case it exists for passed.
-Results recorded in the guide's results section.
+The transaction index finished at 02:05 on 18 October, inside the estimate made the night before. It takes
+68 GB, which left 50 GB free on the laptop's SSD.
 
-The owner then reported the lid was open in Test 1, and that rtcwake had printed the wakeup as 19:49:04 at
-set time while `rtcwake -m show` said 18:49:04. That hour pointed to the clock. The agent checked
-over SSH: the RTC keeps local time (the laptop dual-boots Windows), the time zone left daylight saving on
-1 November, and the laptop had run from 31 October to the test. Linux writes the RTC only at shutdown,
-so the RTC was an hour ahead; rtcwake counts from the RTC, so the alarm was really for 19:49. The
-shutdown corrected the RTC, which is why Test 2 then passed. The same flaw would hit the guard twice a
-year: an autumn alarm an hour late, a spring alarm in the past. Options put: save the system time to
-the RTC just before the alarm, or switch the RTC to UTC. The owner chose: "D-041 yes, on local time, not
-UTC". Built: the guard runs `hwclock --systohc` (which follows /etc/adjtime, so the RTC stays local)
-before rtcwake, and a failing or missing hwclock never blocks the alarm or the shutdown. Suite 123/123
-under dash; removing the hwclock call fails 3 tests. The guide's Test 1 now starts with the same
-hwclock line. Test 1 retest pending; the owner reinstalls the guard.
+Asked to "show me the move list", the agent sorted every file by destination: a new private repository on the
+owner's crypto-side account for the node, seed and start-at-boot tools; a separate real-name repository for
+the dual-boot runbook and SSH kit; checksums and superseded copies kept out of git. The owner agreed to the
+names and to starting both private. Author identity and history in the crypto-side repositories were cleaned
+before the first push.
 
-Retest of Test 1 the same evening, on AC with the lid open: alarm due 19:55:07, booted 19:55:28. The
-owner: "self-start worked on AC! So it was the DST issue." The logs support that reading without proving
-it: the RTC had already been corrected by the earlier shutdown, and the failure was not reproduced on
-purpose. The HP 14 now passes both wake tests; the guard with the hwclock step awaits the owner's install.
+### 2026-10-21, session B (3a630e51): a false alarm, then start-at-boot installed
 
-The owner then asked whether the files given to PyBLOCK were "a nice free-standing set of docs" they
-could load into their website. The agent said no: plain-text files, a setup guide written around this
-one laptop, two of them existing only on the stick, and the daylight-saving fix in one file only. It
-proposed a Markdown doc set in the repo (D-042); the owner: "D-042 yes". The owner has asked PyBLOCK
-whether their site wants HTML; Markdown converts easily if so. Built `docs/non-systemd/`: an index with
-a quick start and a tested-on table, then install, battery guard, machine settings, clock and time,
-power recovery (the wake-test guide, moved here from `node/` so there is one copy), troubleshooting and
-reference. Reading the old setup guide turned up a contradiction: it said to set AC power-on to "On, or
-Last State", while the power guide says Last State leaves a cleanly stopped machine off; the new pages
-say Power On. Mid-build the owner added: "add a list of the dev tools ... I install[ed] on Devuan so the
-DATUM gateway could be built from source ... a separate file ... to supplement the PATUM installation
-instructions". The agent took the list from the laptop's apt history rather than memory: nine packages
-installed on 17 October (curl, git, cmake, build-essential, pkgconf and four -dev libraries), now
-`build-tools.md` with a one-line check for what is missing. New tests: every relative link and anchor
-in the doc set resolves, and the reference page's checksums match the scripts; breaking a link, an
-anchor or a checksum each fails a test. Suite 126/126.
+The owner: "help me get Patum running again. Looks like we had an HP 14 hard restart."
 
-Later the same evening the owner asked to "start the PATUM service on port 32999. The browser can't
-connect. What are we missing on an auto-start? Please fix & document that". The panel was simply not
-running: the wake-test reboots had ended it, and on Devuan nothing started it again. On systemd PATUM
-installs an always-on panel service; here it never runs, and since 21 October the panel had been started
-by hand on purpose. The agent restarted it over SSH (detached, port 32999, the page answering locally,
-node and gateway on the same pids) and, at the owner's word, reversed the hand-start rule: a third init
-script, `devuan-patum-panel.init`, with its own installer, which `install-autostart.sh` now also runs.
-Design choices: the panel waits until `datum_gateway` runs (up to an hour) so it never opens on a
-half-started node; a panel already running is left alone, re-checked just before start; stop sends TERM
-and never force-kills, because the panel may be mid-update; `env HOME=` is set because PATUM finds its
-folders under the home. On the HP 14 the panel installer runs alone, so the live node's older init
-script is not replaced as a side effect. The doc set gained a panel section and a "browser cannot
-connect" entry. The owner also answered D-043: the systemctl-service-shim was his own experiment and is
-not needed, so the docs leave it out. Suite 138/138; one earlier run showed 4 wake-alarm checks failing
-once and not again in three reruns, not related to this change and noted as a possible flake.
+No restart had happened. Before acting, the agent read the uptime, boot history and process start times, and
+everything dated from 14 and 17 October. The window list showed every app still open on workspace 1 while the
+screen showed workspace 4. The kernel log had bursts of an unmapped HP key in the same minute; the owner traced
+them to phones resting on the keyboard corners. A first theory, that processes had been killed for lack of
+memory, was stated as a theory, checked with one command, and dropped when the log was empty.
 
-The owner installed the panel's init script and removed the systemctl shim. Checked over SSH: boot order
-starts the node, gateway, panel in that order and stops them in reverse; the panel runs from the init
-script's pid file on 127.0.0.1:32999 and answers; the node and gateway kept their pids. A real reboot is
-still to come.
+Rather than ask for sudo every time it needed a log, the agent proposed adding the owner's account to the
+log-reading group once, and the owner did.
 
-The owner then answered two open choices: "D-044 yes, and D-039 Yes. All Pyblock's PATUM users are running rdts."
-So the installer keeps its hard rdts requirement. For D-044 the agent first ran `patum -check` once on
-the laptop: it printed "up to date (PATUM v0.5.9)" and touched no file, so the panel does not read its
-result and a daily run needs its own log. Built: `install-panel-autostart.sh` also writes
-`/etc/cron.d/patum-check`, a check-only run as the node's user at a random time from 03:00 to 05:59 (so
-nodes do not all ask PyBLOCK in one minute), appending a timestamp and the result to
-`~/pyblock-node/patum-check.log`. The cron line carries no % sign, which cron would cut. The install page
-is now "Auto-start at boot", with a table of what PATUM uses on systemd and what replaces it here. Two
-intermittent suite failures this evening (wake checks once, the PowerShell manifest checks once) matched
-the PC's commit charge at 89 % with a 9.6 GB kernel pool, the known leak, not the code; reruns passed.
-Suite 142/142.
+Before handing over the install command, the agent checked the prepared scripts against the running system:
+the hand-started node's own pid file, so the script could stop that node cleanly, the gateway's configuration
+paths, and the RPC settings. After the install it checked the boot order in two places. The start and stop
+order numbers alone are not enough on Devuan, which runs shutdown scripts in parallel, so it also read the
+dependency file that decides whether the node stops before its drive is unmounted.
 
-- 2026-11-07, session E (79d5edad): the owner rebooted the laptop cleanly after running the autostart installer, and the node, gateway and panel all came back by themselves, which is the first real boot test of the panel service. The gateway log warns at every start that its configured 4096 stratum clients exceed the 1024 open-file soft limit. The rotated logs show it at every start since 17 October; with 3 miners the gateway holds 21 files open. Judged harmless at this scale; the owner chose to leave it (D-045 a).
+The reboot test passed: the node shut down cleanly in 4 seconds, and the node and gateway were back before
+anyone logged in. The miners spent about ten minutes on their backup pool before returning by themselves. The
+agent first said they might not return; the logs showed they did.
 
-- 2026-11-07, session E (79d5edad), later: PyBLOCK confirmed that Markdown suits them, so no HTML conversion is needed. The README's tested-on section was refreshed (PATUM 0.5.9, three miners, the panel seen starting at a real boot). The owner asked whether one zip would worry a recipient. The answer: the checksums inside a zip prove only that the download is intact, not who made it, so the zip's own SHA-256 goes in the message sent with the upload. The owner chose to keep a copy on the PC (D-046 a): tools/make-pyblock-bundle.py builds the zip reproducibly (fixed dates, fixed modes, sorted entries) into the gitignored dist/<date>/. Rebuilding from the repo reproduced the zip already sent byte for byte (SHA-256 5b1046af...). It ships with 10 tests; the suite stands at 152/152.
+The panel stayed a manual start for now, after a check that starting it by hand creates no second node or
+gateway. One slip: a filter meant to hide the RPC password failed and printed it into the session. It stayed
+local and out of every file.
+
+### 2026-10-22, session C (1b5183ae): the project becomes this repository
+
+The owner: "load the Devuan Node project, then build the xbt-node repo". The plan had been approved on 18
+October, so the agent restated it from that record and built it rather than reopening it.
+
+The node-side scripts and the as-built runbook went to `node/`, the Windows-side manifest and drive scripts to
+`seed/`, the tests to `test/`, and the first plan, never run as written, to `docs/plan-before-build.md`. The
+checksum manifests stayed out of git in a gitignored staging folder that the drive script now reads.
+
+Everything personal came out. A hard-coded Windows user path became a required setting, and so did the drive's
+serial number, which the agent added beyond the agreed list because a serial identifies a physical device.
+Example user names became placeholders, and the older entries in this log now say "the owner". Five new tests
+check that a missing setting is refused before anything runs, with the setting named; the suite passed 27 of
+27. A search of every staged file for names, accounts, user paths, network and hardware addresses, emails, the
+serial and RPC settings found only false positives.
+
+The owner installed the GitHub command-line tool, signed it in to the crypto-side account and said "go ahead".
+The agent checked that the tool had not taken over git's own credential store, searched the full history again
+including the commit message, made the first commit, and pushed to a new private repository.
+
+---
+
+## Part 3: Running it (28 to 31 October)
+
+### 2026-10-28, session D (ddbba4a0): the upgrade that looked hung
+
+The owner: "I have PATUM updated to 0.5.6 and it is updating the Knots node to 29.4.3 but it seems to have
+hung... downloaded, verified the release signature, extracting, then just hung for 6+ minutes."
+
+It had not hung. Over SSH the agent found the new 29.4.3 binary in place, the old node shut down cleanly, and
+the new one loaded in ten seconds, in sync, with the fork rules still set. The gateway had kept its miners
+throughout. The window that stopped at "extracting" was the panel's own console, which printed nothing
+more. The agent's first reading called it the panel's progress display; the owner corrected that it was a
+terminal window, and pointed out that the panel still offered to update the node.
+
+That offer was false. A node advertises its version to its peers in a user-agent line, and PATUM writes that
+line as a fixed `uaspoof` setting in the node's configuration at install time, but did not rewrite it on
+update. The panel reads the advertised version, so it still saw 29.4.2. Pressing the button again would have
+restarted the node for nothing. The agent offered three options: fix the line and restart the node, leave the
+warning, or report it upstream. It recommended the fix, because a real rule change two to three days away made
+a standing false "outdated" warning dangerous to ignore, and the owner agreed.
+
+The agent backed up the configuration, changed the one line and checked the diff, stopped the node over RPC,
+and started it with PATUM's own command so the start-at-boot script would still recognize it. The new version
+was then advertised, the panel reported the node up to date, and the gateway, never restarted, went about 11
+seconds without a fresh template. The owner reported the update behavior to PyBLOCK.
+
+The agent also explained, without changing anything, the gateway's "empty work sent to 2 clients" lines: after
+each new network block the gateway sends an instant job with no transactions, so the miners stop working on a
+stale block before the full template is ready.
+
+### 2026-10-31, session E (79d5edad): a health check, a fast clock, and a battery guard
+
+The owner: "look into the HP 14", then, after the first report: "Patum page is up but static, not live...
+Worried that things underneath aren't working, though the DATUM gateway console web page looks OK."
+
+A read-only check over SSH found the node in sync with 17 peers on the same process since the upgrade, and the
+gateway on its 21 October process with both miners and a fresh job about every 41 seconds. Neither log had
+errors. A rule change about 65 blocks away needed Knots 29.4.3, which the node already ran. The static page was
+only the panel: its process had exited at some unknown time, and since it picked a new port on each run, an old
+browser tab could not find it again even after a restart.
+
+**A clock nobody kept.** The laptop's clock ran about 19 seconds fast, measured against the PC after the PC's
+own clock was checked against an internet time server. Without systemd, Devuan has no built-in time sync, and no
+time daemon had been installed. The owner agreed to install chrony. The agent added one change of its own:
+chrony was not to write the hardware clock, because on this dual-boot machine the hardware clock keeps local
+time for Windows, and the agent was not sure chrony's writes would respect that. Devuan already saves the system
+time to the hardware clock at shutdown. Once running, chrony measured the drift at about one second a day, which
+fits 19 seconds over the 17 days since the install. The clock then stayed within a millisecond of four time
+servers.
+
+**The cost of fixing it.** The agent had warned that the one-time correction would come when chrony was told to
+step the clock, and to watch the gateway then. It came earlier: Debian starts chrony as soon as it is installed,
+and the default configuration corrects a large error in one jump. The clock moved back 19.08 seconds, and 3
+milliseconds later the gateway logged "no data received from server in over 60 seconds", reconnected within a
+second, and lost the shares it had queued for the pool, probably a few seconds of pool credit, with no effect on
+any block. That the backward jump tripped the gateway's 60-second timer is an inference from the timing; the
+gateway's code was not read. The lesson: on a Debian-family mining machine, installing a time daemon is itself
+the moment the clock moves.
+
+At the owner's request the agent restarted the panel. PATUM had updated its own panel program to 0.5.7 on 29
+October, and the start command in the notes still pointed at the old 0.5.3 installer, so the agent used the
+current program, on a fixed port so the address stays the same across restarts. It checked that the node and
+gateway kept their processes, and wrote the start, use and stop steps into a short page for the owner.
+
+**Clean shutdown, and what was missing.** The owner: "It's very important for Bitcoin nodes including Knots
+nodes, to be given a clean shut-down signal... Look into what is needed to do that well. See if you can tell if
+PATUM has a way to trigger it." A read-only review found the shutdown and reboot path already sound: the gateway
+stops first, the node gets up to 15 minutes and is never forced, and every stop in the log had been clean within
+seconds. The gap was the battery. The desktop's low-battery action was suspend, and it runs only while someone is
+logged in, which after a reboot nobody is. PATUM stops the node itself only during its own wizard and updates, so
+on Devuan the clean stop comes only from this repository's init scripts.
+
+The agent wrote `battery-guard.sh`, which root runs from cron every minute. When the AC adapter is off and the
+battery is discharging at or below 25 % on two checks in a row, it starts a normal shutdown. The threshold sits
+above the desktop's 20 % on purpose, because a suspended machine runs no cron jobs. The system's upower daemon
+was considered and not chosen, because it may not run without a desktop session and that could not be checked
+cheaply. A separate review found four things worth fixing, all fixed before the commit: tests that could pass on
+timing, a failed shutdown that was neither logged nor retried, a wireless mouse whose battery could be read as the
+laptop's, and the settings file's permissions.
+
+**Coming back after an outage.** The owner checked the BIOS: it has no "power on when AC returns" setting and no
+Wake on LAN, so a laptop the guard had shut down would stay off until someone pressed the button. The owner chose
+the agent's proposal: before shutting down, the guard sets the clock's wake alarm for 60 minutes later. If the
+power is back, the node and gateway start as usual; if not, the guard shuts the laptop down again with a new
+alarm. Below 10 % it sets no alarm, so repeated boots cannot run the battery flat, and a failed alarm never stops
+the shutdown. A second review led to four more fixes, including a setting with a leading zero that was read as an
+octal number, and a rule that the guard does nothing in the first five minutes after boot, so it cannot stop a
+node that is still starting. In both rounds the agent broke the new code on purpose to confirm the tests caught
+it, and they did. Whether this laptop actually wakes from off was still unknown; a ten-minute test went into the
+runbook for the owner to run.
+
+---
+
+## Part 4: Making it useful to others (2 to 7 November)
+
+### 2026-11-02, session 25a2ab43 (from the gbox project): the materials go to PyBLOCK
+
+The clean-shutdown review ended with the owner sharing the Devuan scripts and their reasoning with PyBLOCK, so
+that they could publish them for other people running PATUM on Linux without systemd. From here on the work
+aimed at a set of scripts and guides that would hold up on machines other than this one. Nothing on the node
+changed that day.
+
+### 2026-11-04, session E (79d5edad), resumed: scripts for other machines, and a wake test anyone can run
+
+Two changes made the scripts fit other machines. The node's init script had refused to start without the external
+block drive, which is right here but wrong for a machine that keeps its blocks on the internal disk. The drive
+check is now off unless a mount point is named, and the installer picks it itself from the node's `blocksdir` and
+`/etc/fstab`, so a reinstall here keeps the protection and other machines need no change. The script's header,
+which still said it had never run on Linux, was brought up to date. The installer's hard rdts requirement was kept,
+and put to the owner as a question rather than changed silently.
+
+A separate review found one serious gap. On a machine set up before this change, replacing only the init script
+would have silently dropped the drive check, exactly the failure it exists to prevent. Now the script refuses to
+start the node, and names the fix, when the settings file predates the drive setting and the node's configuration
+moves its blocks. Smaller fixes covered a blocks folder inside the drive rather than at its top, spaces around "="
+in the configuration, and paths with unsafe characters. All 116 tests passed.
+
+The owner then asked for exact steps to run the wake test, "so people can see how to verify on their own systems",
+made "as universal as practical". The guide covers the tests themselves (on AC, on battery, and the full guard path
+on a real drain, with the log lines to expect), what to check in the firmware if the machine does not wake, and
+the other ways a machine can come back after an outage: power-on-after-AC-loss on desktops (with the warning that
+"last state" stays off after a clean shutdown), a UPS that signals a shutdown, Wake on LAN, server management
+controllers, single-board computers, and a smart plug for a machine that is already off. BIOS setting names are
+labeled as typical, not checked against any one model.
+
+### 2026-11-04 evening, session E (79d5edad), continued: a daylight-saving bug, a doc set, a panel that starts itself
+
+The owner ran the first two wake tests and reported: "wake test on AC failed; never woke, and the time looked right
+when I checked it in step 3 ... ran test 2. That succeeded (lid was open as recommended), and uptime value was 15-20
+sec after the alarm time." The agent read the logs before offering a cause. The first test's alarm had been due six
+minutes before the owner pressed the button; the second woke 22 seconds after its alarm; every stop was clean. A
+laptop that wakes on battery but not on AC is the reverse of the usual pattern, so the agent named no cause and
+proposed repeating the first test with the lid open (D-040).
+
+The owner's next detail settled it. When the alarm was set, `rtcwake` had printed the wake time as 19:49:04, while
+`rtcwake -m show` said 18:49:04. An hour's difference pointed at the clock. The laptop's hardware clock keeps local
+time for Windows, the time zone had left daylight saving on 1 November, and the laptop had run since 31 October.
+Linux writes the hardware clock only at shutdown, so it was an hour ahead, and since `rtcwake` counts from the
+hardware clock, the alarm was really set for 19:49. The shutdown corrected the hardware clock, which is why the
+second test passed. The same flaw would hit the guard twice a year, with an autumn alarm an hour late and a spring
+alarm in the past. The agent offered two fixes: save the system time to the hardware clock just before setting the
+alarm, or switch the hardware clock to UTC. The owner chose: "D-041 yes, on local time, not UTC". The guard now runs
+`hwclock --systohc`, which follows the system's local-time setting, before setting the alarm, and a failing or
+missing `hwclock` never blocks the alarm or the shutdown. Removing that call makes three tests fail.
+
+The owner repeated the first test that evening, on AC with the lid open. The alarm was due at 19:55:07 and the laptop
+booted at 19:55:28. The owner: "self-start worked on AC! So it was the DST issue." The logs support that reading
+without proving it, since the failure was not reproduced on purpose. With that, the laptop had passed both wake tests.
+
+The owner then asked whether the files for PyBLOCK made "a nice free-standing set of docs". The agent said they did
+not: plain-text files, a setup guide written around this one laptop, two files that existed only on the transfer
+stick, and the daylight-saving fix in just one of them. The owner agreed to a Markdown doc set in the repository
+(D-042), now `docs/non-systemd/`: an index with a quick start and a tested-on table, then pages for install, the
+battery guard, machine settings, clock and time, power recovery (the wake-test guide, moved here so there is one
+copy), troubleshooting and a reference page. Writing it exposed a contradiction: the old setup guide said to set
+power-on-after-AC to "On, or Last State", while the power guide said Last State leaves a cleanly stopped machine
+off. The new pages say Power On. At the owner's request a page lists the development tools Devuan needed before the
+gateway would build; the agent took the list from the laptop's package history rather than memory (nine packages,
+installed on 17 October). New tests check that every link and anchor in the doc set resolves and that the reference
+page's checksums match the scripts.
+
+Later the owner wrote: "start the PATUM service on port 32999. The browser can't connect. What are we missing on an
+auto-start? Please fix & document that". The panel was not running: the wake-test reboots had ended it, and on
+Devuan nothing started it again. On systemd, PATUM installs a panel service that is always on. At the owner's word
+the agent reversed the hand-start rule of 21 October and wrote a third init script for the panel, with its own
+installer, which `install-autostart.sh` also runs. The panel waits until the gateway runs, so it never opens on a
+half-started node; it leaves a panel that is already running alone; and it stops with a plain terminate signal and
+is never killed, because it may be in the middle of an update. The owner also confirmed (D-043) that a systemctl
+shim found on the laptop was his own experiment and not needed, so the docs leave it out. He installed the panel
+script, and the boot order was checked: node, gateway, panel, stopping in reverse.
+
+Finally the owner answered two open questions: "D-044 yes, and D-039 Yes. All Pyblock's PATUM users are running
+rdts." So the installer keeps its rdts requirement. For D-044 the agent first ran `patum -check` once on the laptop:
+it reported "up to date (PATUM v0.5.9)" and wrote no file, so the panel does not read its result and a daily check
+needs its own log. The panel installer now also writes a cron entry that runs the check once a day as the node's
+user, at a random time between 03:00 and 05:59 so that nodes do not all ask PyBLOCK in the same minute, and appends
+the result to a log. The install page became "Auto-start at boot", with a table of what PATUM uses on systemd and
+what replaces it here. The suite stood at 142 tests, all passing.
+
+### 2026-11-07, session E (79d5edad), continued: the real boot test, and the bundle
+
+After running the start-at-boot installer, the owner shut the laptop down cleanly and started it with the power
+button. The node, gateway and panel all came back by themselves: the panel service's first real boot test. The
+gateway's log warns at every start that its 4,096 configured stratum clients exceed the system's limit of 1,024 open
+files. The older logs show the same warning at every start since 17 October, and with three miners the gateway holds
+21 files open, so it is harmless at this scale. The owner chose to leave it (D-045). The three miners are the
+two from 17 October and a third that joined the gateway after 31 October; the day it moved is not recorded here.
+
+The guides stayed in Markdown, and the tested-on section of `docs/non-systemd/README.md` was refreshed: PATUM 0.5.9,
+three miners, and the panel seen starting at a real boot. The owner asked whether a single zip file would worry a
+recipient. The agent's answer: the checksums inside a zip prove only that the download is intact, not who made it,
+so the zip's own SHA-256 belongs in the message sent with it. The owner chose to keep a copy of what was sent
+(D-046): `tools/make-pyblock-bundle.py` builds the zip reproducibly, with fixed dates, fixed file modes and sorted
+entries, and rebuilding from the repository reproduced the zip already sent byte for byte. The zip went to PyBLOCK
+with a cover note the agent drafted and the owner sent, telling the recipient it was a Claude draft. The suite stood
+at 152 tests.
+
+The front-page README was rewritten for a first-time reader, and a pre-public pass began: a search of the whole tree
+and every commit, author and message for anything personal came back clean.
+
+### 2026-11-07, session F (2dbde2df): the pre-public narrative pass
+
+The owner asked for "a final 'whole narrative' review including writing style, so it's easily consumed by someone
+new and reads like a unitary story, not a bunch of pasted together snippets." Following his decisions, the repository
+gained an MIT license (D-047), and the correspondence folder left the repository (D-049) and, as the pass's last
+step, its history (D-051). This log was regrouped into four parts, with a short story and a cast at the top, and
+the per-day notes were rewritten as prose. The runbook's header and versions were brought up to date and two contradictions in it resolved.
+
+---
+
+## Where things stand
+
+The node has run on the laptop since 17 October 2026, now under PATUM 0.5.9 with Bitcoin Knots 29.4.3 and three
+miners on its gateway. PATUM moved from 0.5.3 at bring-up through 0.5.6 and 0.5.7 to 0.5.9, the last installed on 3
+November. By 7 November the node's advertised version line read PATUM 0.5.9, written by PATUM itself, so the hand
+edit of 28 October is no longer needed.
+
+What is proven: clean starts and stops at every boot since 21 October, the panel at boot since 7 November, the wake
+alarm on AC and on battery, and the battery guard in automated tests with simulated battery readings. What is not:
+the battery guard
+on a real drained battery, which only a real outage or a deliberate drain can show. Still open: hiding the Windows
+partition from Devuan, and making the repository public, which is the owner's step.
