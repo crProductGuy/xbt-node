@@ -40,7 +40,6 @@ do not apply.
 | `seed/` | Windows PC, then a Linux live USB on the same PC | `make-manifest.ps1` hashes the stopped node's data. `make-ext4-seed.sh` formats the external drive as ext4 and fills it, checking every file it can. |
 | `tools/` | Windows PC | `make-pyblock-bundle.py` builds the dated zip of the `docs/non-systemd` guides and scripts, byte for byte the same on every run. |
 | `test/` | Windows PC, Git Bash | `run-tests.sh`: 152 checks covering the seed scripts in a safe test mode, every init script and installer under `dash`, the battery guard, the docs' links and checksums, and the zip. |
-| `notes/` | | The two notes sent to the PyBLOCK team, as sent. |
 | `docs/` | | `plan-before-build.md`, the plan as written before anything ran. Where it disagrees with the runbook, the runbook wins. |
 
 ## How it fits together
