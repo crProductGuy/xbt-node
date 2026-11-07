@@ -76,7 +76,7 @@ Bitcoin Knots 29.4.3 and the DATUM gateway, with three miners pointed at it.
 | Part | Since | Seen working |
 |---|---|---|
 | Node and gateway start and stop | 2026-10-21 | Many reboots; every stop ends `Shutdown: done` |
-| Battery guard | 2026-10-31 | In tests and a simulated low battery; not yet on a real drained battery |
+| Battery guard | 2026-10-31 | In automated tests with simulated battery readings; not yet on a real drained battery |
 | Wake alarm after a guard shutdown | 2026-11-04 | Woke the laptop from off, on AC and on battery |
 | Panel at boot, daily update check | 2026-11-04 | Panel came back by itself after a power-off, 2026-11-07 |
 
