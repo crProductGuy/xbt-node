@@ -6,6 +6,10 @@ STATUS.md
 # 1 MB, already on the drive) plus a copy of node/. Rebuilt before every fill.
 seed/to-drive/
 
+# Bundles sent to PyBLOCK, one dated folder each, from tools/make-pyblock-bundle.py.
+# Kept on this machine as the exact bytes sent; rebuildable from the repo.
+dist/
+
 # Logs from a fill or a bring-up
 *.log
 

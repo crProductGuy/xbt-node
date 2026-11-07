@@ -38,6 +38,9 @@ Read these before acting, in this order:
 - `seed/`: runs on the Windows PC. `make-manifest.ps1` hashes the stopped
   node's data; `make-ext4-seed.sh` formats and fills the drive from a live
   USB session. `seed/to-drive/` is the gitignored staging folder.
+- `tools/make-pyblock-bundle.py`: builds the dated zip of the Devuan scripts
+  and `docs/non-systemd` guides sent to PyBLOCK, reproducibly, into the
+  gitignored `dist/<date>/`, which keeps the exact bytes sent.
 - `test/run-tests.sh`: the test suite. Run it in Git Bash with an empty
   scratch directory: `bash test/run-tests.sh <empty dir>`. Needs `pwsh`.
 

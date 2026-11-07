@@ -335,5 +335,25 @@ for f in devuan-bitcoind.init devuan-datum-gateway.init devuan-patum-panel.init 
 done
 check "docs: reference.md checksums match the scripts" "${sums:-all match}" "all match"
 
+# tools/make-pyblock-bundle.py: the zip sent to PyBLOCK, rebuilt from the repo
+B="$WORK/bundle"; Z=devuan-patum-scripts-2030-01-02.zip
+python "$HERE/tools/make-pyblock-bundle.py" 2030-01-02 "$B/a" >/dev/null 2>&1
+python "$HERE/tools/make-pyblock-bundle.py" 2030-01-02 "$B/b" >/dev/null 2>&1
+check "bundle: builds a zip, SHA256SUMS and the zip's checksum" "$(ls "$B/a" | tr '\n' ' ')" "SHA256SUMS $Z $Z.sha256 "
+check "bundle: two builds give the same bytes" "$(cmp -s "$B/a/$Z" "$B/b/$Z"; echo $?)" 0
+check "bundle: the .sha256 file checks the zip" "$(cd "$B/a" && sha256sum -c --status "$Z.sha256"; echo $?)" 0
+mkdir -p "$B/x" && (cd "$B/x" && unzip -q "$B/a/$Z")
+check "bundle: 17 files in one folder" "$(ls "$B/x" | tr -d '\n') $(ls "$B/x/devuan-patum-scripts" | wc -l | tr -d ' ')" "devuan-patum-scripts 17"
+check "bundle: SHA256SUMS inside passes for 7 scripts" "$(cd "$B/x/devuan-patum-scripts" && sha256sum -c SHA256SUMS 2>/dev/null | grep -c ': OK$')" 7
+diffs=""; for f in "$HERE"/node/{devuan-*.init,install-autostart.sh,install-panel-autostart.sh,battery-guard.sh,install-battery-guard.sh} "$DOCS"/*.md; do
+  cmp -s "$f" "$B/x/devuan-patum-scripts/$(basename "$f")" || diffs+=" $(basename "$f")"; done
+check "bundle: every file is byte-identical to the repo" "${diffs:-none}" none
+check "bundle: no CR bytes in any file" "$(cat "$B/x/devuan-patum-scripts"/* | tr -cd '\r' | wc -c | tr -d ' ')" 0
+check "bundle: scripts are mode 755, guides 644" "$(unzip -Z "$B/a/$Z" | grep -c '^-rwxr-xr-x') $(unzip -Z "$B/a/$Z" | grep -c '^-rw-r--r--')" "7 10"
+python "$HERE/tools/make-pyblock-bundle.py" 2030-01-02 "$B/a" >/dev/null 2>&1; rc=$?
+check "bundle: refuses to overwrite an earlier build" "$rc $(cmp -s "$B/a/$Z" "$B/b/$Z"; echo $?)" "1 0"
+python "$HERE/tools/make-pyblock-bundle.py" 2030-13-02 "$B/c" >/dev/null 2>&1
+check "bundle: rejects a bad date" "$? $(test -e "$B/c"; echo $?)" "2 1"
+
 echo; echo "passed $PASS, failed $FAIL"
 [[ $FAIL -eq 0 ]]
