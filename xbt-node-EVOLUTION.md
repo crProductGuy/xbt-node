@@ -473,5 +473,5 @@ edit of 28 October is no longer needed.
 What is proven: clean starts and stops at every boot since 21 October; the panel at boot, installed on 4 November
 and seen at a real boot on 7 November; the wake alarm on AC and on battery; and the battery guard in automated
 tests with simulated battery readings. What is not: the battery guard on a real drained battery, which only a real
-outage or a deliberate drain can show. Still open: hiding the Windows
-partition from Devuan, and making the repository public, which is the owner's step.
+outage or a deliberate drain can show. The repository went public on 7
+November, after the owner added the "why" to the README. Still open: hiding the Windows partition from Devuan.
