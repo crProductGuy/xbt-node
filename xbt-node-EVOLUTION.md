@@ -457,7 +457,9 @@ repository gained an MIT license (D-047), and the correspondence folder left the
 pass's last step, its history (D-051). This log was regrouped into four parts, with a short story and a cast at
 the top, and the per-day notes were rewritten as prose. The runbook's header and versions were brought up to
 date, and two contradictions in it were resolved. A fresh reviewer then read the log end to end, and its findings
-were folded in.
+were folded in. At the owner's word the rewritten history was force-pushed. GitHub still serves the dropped
+commits to anyone who has their hashes, so the owner deleted the GitHub repository and recreated it empty
+(D-054), and the cleaned history was pushed into it.
 
 ---
 
