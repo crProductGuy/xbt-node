@@ -461,6 +461,42 @@ were folded in. At the owner's word the rewritten history was force-pushed. GitH
 commits to anyone who has their hashes, so the owner deleted the GitHub repository and recreated it empty
 (D-054), and the cleaned history was pushed into it.
 
+### 2026-11-07, session G (6945e41c): a pre-push hook that cannot pass by failing
+
+Goal, in the owner's words: "D-055 yes", making the D-053 rule ("a zero is
+not proof") mandatory rather than a sentence that can be ignored. The trigger
+was session F's own leak grep, whose exclusion pattern errored and printed
+nothing, so `| wc -l` reported 0 before the push of a repo about to go public.
+
+What was built, outside this repo on purpose (the pattern list holds the
+strings it hunts for): a pre-push hook, installed here as a two-line stub in
+`.git/hooks/pre-push`. Before scanning, every pattern must match a built-in
+sample of its own. A pattern that does not compile, misses its sample, or is
+swallowed by an allow rule blocks the push, and so does a missing pattern file
+or any git error. It then scans the tree at the pushed commit and `git log -p`
+of the pushed range (all history for a new branch), names and messages
+included. Perl does the matching so the regex dialect is the same on Windows
+and macOS. A stub, not `core.hooksPath`, so no other hook is disabled.
+
+Verified: a 16-case scratch-repo test with real pushes to a local bare remote
+(planted leak, leak only in history, leak in a commit message, broken pattern,
+the exact trailing-backslash pattern, missing file, unset config, clean push,
+branch deletion). Exercised on this repo with a dry-run push to a new branch
+name, which forced a full-history scan: clean. Nothing was pushed.
+
+Two companion agent-side hooks: one tells the agent a result is invalid when
+a grep/sed error sits next to an empty or 0 output, and one refuses
+`git push --no-verify`. The first was found not to fire on its first live
+test: the agent harness hands both output streams back merged, not separate
+as documented. It was fixed to look in both, then confirmed live.
+
+A fresh reviewer, asked to break the hooks, did: binary and UTF-16 files
+were skipped by the scan, the push refusal fell to a quoted or abbreviated
+flag, and an anchored pattern could pass its self-test and never hit. Each
+became a regression test before its fix (21 cases now), and both repos were
+rescanned clean afterwards. One gap stays open by design: an error thrown
+away with `2>/dev/null` never reaches any hook (D-061).
+
 ---
 
 ## Where things stand
