@@ -511,3 +511,14 @@ and seen at a real boot on 7 November; the wake alarm on AC and on battery; and 
 tests with simulated battery readings. What is not: the battery guard on a real drained battery, which only a real
 outage or a deliberate drain can show. The repository went public on 7
 November, after the owner added the "why" to the README. Still open: hiding the Windows partition from Devuan.
+
+## 2026-11-03: the scripts go to the PyBLOCK team (session 21a6f691, written 11-09)
+
+The owner: "PyBLOCK folks would like the scripts." Then, mid-turn: "also provide all relevant guidance for
+BIOS settings, laptop lid settings, power settings, etc. ... so my PyBLOCK buddies can build a full package for
+us Devuan enthusiasts." The five node scripts were written from git, byte-identical to what runs on the laptop,
+with a README and a settings guide (BIOS, lid, power, clock, network, block drive, panel). Each guide item was
+marked done or advice from the recorded state. The handoff flagged that the scripts required an external block
+drive, which most PATUM users do not have. That became D-038, and the PyBLOCK lead asked for it on 4 November.
+A claim in the handoff reply was wrong: that the Windows working copies had Windows line endings. A grep had
+miscounted, and the files' own hashes showed it at the time. Found on 9 November.
