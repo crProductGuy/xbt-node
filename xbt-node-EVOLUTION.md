@@ -1,7 +1,7 @@
 # xbt-node: construction and evolution log
 
 This is the story of how a spare laptop became a full XBT node for a small home mining setup, built over
-four weeks by the owner and a coding agent (Claude Code). It records what was asked, what the agent
+five weeks by the owner and a coding agent (Claude Code). It records what was asked, what the agent
 proposed, what the owner decided and why, what went wrong, and how each step was checked. Git holds the
 line-by-line changes; this file holds the reasoning.
 
@@ -16,7 +16,8 @@ On 17 October the node came up from the drive with every file checked, and the m
 evening. Because the PyBLOCK tools it runs (PATUM) expect systemd, the rest of the work was making the
 laptop look after itself without one: start and stop cleanly at every boot, shut down before the battery
 dies, and wake again after an outage. Those scripts and guides were shared with PyBLOCK so they could
-publish them for other people running PATUM on Linux without systemd, and this repository holds them.
+publish them for other people running PATUM on Linux without systemd, and this repository holds them. In
+November PyBLOCK offered to host them as the official PATUM guide for those systems.
 
 ## Who and what
 
@@ -26,8 +27,8 @@ publish them for other people running PATUM on Linux without systemd, and this r
 - **The laptop, or HP 14:** an HP Laptop 14 that runs the node. It dual-boots Windows and Devuan 6.
 - **The seed drive, or Passport:** a 2 TB external USB drive, formatted ext4, that carried the chain from the PC to
   the laptop. The laptop's block files still live on it.
-- **XBT:** Bitcoin with Blake2b proof of work and spam-hostile rules. Every node runs Bitcoin Knots with
-  `consensusrules=rdts`; regular-Bitcoin reasoning does not apply.
+- **XBT:** Bitcoin with Blake2b proof of work and spam-hostile rules (rdts). This node runs Bitcoin Knots with
+  `consensusrules=rdts` set; regular-Bitcoin reasoning does not apply.
 - **PyBLOCK and PATUM:** PyBLOCK publishes PATUM, a bundle of the Blake2b Knots build, a DATUM gateway and a small
   web panel. **DATUM** is the protocol that lets a miner build its own block templates against its own node; the
   gateway speaks stratum, the usual miner protocol, to the miners and talks to the node and to the pool (WAVICLES).
@@ -336,7 +337,7 @@ went into the runbook for the owner to run.
 
 ---
 
-## Part 4: Making it useful to others (2 to 7 November)
+## Part 4: Making it useful to others (2 to 13 November)
 
 ### 2026-11-02, a gbox project session (25a2ab43): the materials go to PyBLOCK
 
@@ -345,6 +346,18 @@ scripts and the reasoning behind them with PyBLOCK, so that they could publish t
 on Linux without systemd. From here on the work
 aimed at a set of scripts and guides that would hold up on machines other than this one. Nothing on the node
 changed that day.
+
+### 2026-11-03, session 21a6f691: the scripts go to the PyBLOCK team (written 11-09)
+
+The next day the request came back: "PyBLOCK folks would like the scripts." The owner widened it at once: "also
+provide all relevant guidance for BIOS settings, laptop lid settings, power settings, etc. ... so my PyBLOCK
+buddies can build a full package for us Devuan enthusiasts." The five node scripts were copied from git,
+byte-identical to what runs on the laptop, with a README and a settings guide covering the firmware, lid, power,
+clock, network, block drive and panel. Each item in the guide was marked as done on this laptop or as advice. The
+handoff flagged that the scripts required an external block drive, which most PATUM users do not have; that
+became D-038, and making the check optional was one of PyBLOCK's two requests on 4 November. One claim in the
+handoff reply was wrong, that the Windows working copies had Windows line endings: a grep had miscounted, and the
+files' own hashes showed otherwise at the time. That was found on 9 November.
 
 ### 2026-11-04, session E (79d5edad), resumed: scripts for other machines, and a wake test anyone can run
 
@@ -497,6 +510,31 @@ became a regression test before its fix (21 cases now), and both repos were
 rescanned clean afterwards. One gap stays open by design: an error thrown
 away with `2>/dev/null` never reaches any hook (D-061).
 
+### 2026-11-13, session E (79d5edad), continued: an offer to host the guide, and the rdts rule revisited
+
+PyBLOCK read the seven scripts and the guides, checked the zip and the checksum file against each other, and
+offered to host the set as the official PATUM guide for Devuan and other systems without systemd, credited to the
+owner. They asked for two changes first. The installer refused to run unless the node's configuration contained
+`consensusrules=rdts`, and PATUM does not write that line, so the installer would stop on every stock PATUM node.
+And the README should say that the gateway script runs one pool, while PATUM can run a gateway for each pool. The
+owner agreed to both, turning the hard requirement kept on 4 November (D-039) into a warning (XN-180): "That was me
+being ... dogmatic (RDTS or nothing, LOL)".
+
+Before anything changed, the agent checked the facts on the laptop. PATUM's original configuration of 16 October
+had no `consensusrules` line; it was added here on 17 October. The `patum` program does not contain the word at
+all. And this Knots build's own help text describes the setting as "Enforce the specified consensus rules
+(default: none)". PyBLOCK's view is that the XBT build applies the rdts rules by itself, so the line is not needed.
+The two cannot both be right, and the wording of the new warning depends on which is: if the binary enforces rdts,
+the line is optional; if it does not, a stock PATUM node runs without rdts, and the warning should tell people how
+to add it. PyBLOCK also sent a patch making the same change. It was not applied: the agent's own change will come
+with tests and matching updates to the guides, and a change to a script that runs as root is read before it is
+used, whoever sends it. The work waits on PyBLOCK's answers about rdts and about running more than one gateway.
+
+Two smaller things came out of the same week. A push rule was added to `AGENTS.md`: check `git status` after
+every add and commit, and run the leak grep as its own step before pushing, after a chained add-and-commit had
+quietly left a file out while its message still named it. And because the install script will change, the zip's
+SHA-256 will too, so a new dated bundle and a short follow-up note will go to PyBLOCK with the changes.
+
 ---
 
 ## Where things stand
@@ -510,15 +548,9 @@ What is proven: clean starts and stops at every boot since 21 October; the panel
 and seen at a real boot on 7 November; the wake alarm on AC and on battery; and the battery guard in automated
 tests with simulated battery readings. What is not: the battery guard on a real drained battery, which only a real
 outage or a deliberate drain can show. The repository went public on 7
-November, after the owner added the "why" to the README. Still open: hiding the Windows partition from Devuan.
+November, after the owner added the "why" to the README.
 
-## 2026-11-03: the scripts go to the PyBLOCK team (session 21a6f691, written 11-09)
-
-The owner: "PyBLOCK folks would like the scripts." Then, mid-turn: "also provide all relevant guidance for
-BIOS settings, laptop lid settings, power settings, etc. ... so my PyBLOCK buddies can build a full package for
-us Devuan enthusiasts." The five node scripts were written from git, byte-identical to what runs on the laptop,
-with a README and a settings guide (BIOS, lid, power, clock, network, block drive, panel). Each guide item was
-marked done or advice from the recorded state. The handoff flagged that the scripts required an external block
-drive, which most PATUM users do not have. That became D-038, and the PyBLOCK lead asked for it on 4 November.
-A claim in the handoff reply was wrong: that the Windows working copies had Windows line endings. A grep had
-miscounted, and the files' own hashes showed it at the time. Found on 9 November.
+PyBLOCK has offered to host the Devuan guide as the official one for systems without systemd, once the rdts
+check becomes a warning and the README explains that the gateway script runs one pool. Both changes wait on two
+answers from PyBLOCK: whether the XBT build of Knots applies the rdts rules without the configuration line, and how
+PATUM runs more than one gateway. Still open as well: hiding the Windows partition from Devuan.
