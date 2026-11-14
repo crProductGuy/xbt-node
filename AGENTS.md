@@ -59,7 +59,10 @@ Set the repo-local identity before the first commit and check it before
 every commit: `git config user.name` must be `crProductGuy`, and
 `git config user.email` the crProductGuy no-reply address. Before any push,
 run a leak grep over the whole tree and over `git log -p`, and show the
-owner the result.
+owner the result. Run `git status --short` after every add and commit,
+since a failed add (an ignored path) leaves the rest uncommitted without
+stopping a chained commit. Run the leak grep as its own step, read the
+result, then push in a separate command.
 
 ## Rules that bound every change
 
