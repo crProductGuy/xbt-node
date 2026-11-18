@@ -510,6 +510,14 @@ became a regression test before its fix (21 cases now), and both repos were
 rescanned clean afterwards. One gap stays open by design: an error thrown
 away with `2>/dev/null` never reaches any hook (D-061).
 
+Later the same evening, still session G: the owner asked how sure the agent was that a standing memory about
+not publishing LAN details would hold. The honest answer was "not very": a memory has to be recalled at the
+moment of writing and blocks nothing. A coverage check showed the push hook guarded only three of twelve repos,
+and the owner chose three layers of enforcement (push, file write, and GitHub issue or release text), built in
+later sessions. Two housekeeping items closed the night: the guide copies on the USB stick were compared file by
+file with the repo (one README was a line behind and was refreshed), and seven owner-facing files that existed
+only on the stick were copied into the local, unpublished notes folder and checked by hash.
+
 ### 2026-11-13, session E (79d5edad), continued: an offer to host the guide, and the rdts rule revisited
 
 PyBLOCK read the seven scripts and the guides, checked the zip and the checksum file against each other, and
